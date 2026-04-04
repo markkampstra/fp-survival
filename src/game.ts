@@ -30,6 +30,7 @@ import { AudioSystem } from './systems/audio-system';
 import { StorageUI } from './ui/storage-ui';
 import { SleepOverlay } from './ui/sleep-overlay';
 import { Clouds } from './world/clouds';
+import { LightningBolt } from './world/lightning';
 import { GameConsole } from './ui/console';
 
 export class Game {
@@ -55,12 +56,15 @@ export class Game {
   private placeableManager: PlaceableManager;
   private placementSystem: PlacementSystem;
   private animalSystem: AnimalSystem;
-  private weatherSystem: WeatherSystem;
+  weatherSystem: WeatherSystem; // public for debug access
   private rain: Rain;
   private audioSystem: AudioSystem;
   private sleepOverlay: SleepOverlay;
   private clouds: Clouds;
+  private lightning: LightningBolt;
   private skyDome: SkyDome;
+  private screenOverlayScene: THREE.Scene;
+  private screenOverlayCamera: THREE.OrthographicCamera;
   private uiOpen = false;
   private springPos = new THREE.Vector3();
 
@@ -136,12 +140,19 @@ export class Game {
     // Animals
     this.animalSystem = new AnimalSystem(this.terrain, this.scene, this.camera, this.inventory);
 
-    // Weather + rain + clouds
+    // Weather + rain + clouds + lightning
     this.weatherSystem = new WeatherSystem(this.dayCycle);
     this.rain = new Rain();
-    this.scene.add(this.rain.mesh);
-    this.clouds = new Clouds();
+    this.scene.add(this.rain.mesh);       // world-space streaks
+    this.scene.add(this.rain.splashes);   // ground splash particles
+    this.clouds = new Clouds(this.renderer);
     this.scene.add(this.clouds.mesh);
+    this.lightning = new LightningBolt(this.scene);
+
+    // Persistent screen overlay scene for rain post-pass
+    this.screenOverlayScene = new THREE.Scene();
+    this.screenOverlayScene.add(this.rain.screenQuad);
+    this.screenOverlayCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 
     // Audio
     this.audioSystem = new AudioSystem();
@@ -378,23 +389,25 @@ export class Game {
     this.animalSystem.update(dt);
     this.dayCycle.update(dt);
     this.weatherSystem.update(dt);
-    this.rain.update(dt, this.camera.position, this.weatherSystem.getIntensity(), this.weatherSystem.getWindStrength());
+    this.rain.update(dt, this.camera.position, this.weatherSystem.getIntensity(), this.weatherSystem.getWindStrength(), this.camera);
+    this.lightning.update(dt, this.camera.position);
     this.water.update(dt);
     this.placeableManager.update(dt);
     this.placementSystem.update(dt);
     this.sun.followPlayer(this.camera.position);
     this.dayCycle.followPlayer(this.camera.position);
 
-    // Clouds — shader-based with sun sync, wind, and storm darkness
+    // Volumetric clouds — render to half-res target, then composite
     const cloudCoverage = this.weatherSystem.getCloudCoverage();
     const windStrength = this.weatherSystem.getWindStrength();
     const rainIntensity = this.weatherSystem.getIntensity();
     this.clouds.setCoverage(cloudCoverage);
     this.clouds.setWindStrength(windStrength);
-    this.clouds.setDarkness(rainIntensity); // darker clouds = more rain
+    this.clouds.setDarkness(rainIntensity);
     this.clouds.setSunDirection(this.sun.light.position.clone().normalize());
     this.clouds.setSunColor(this.sun.light.color);
     this.clouds.update(dt, this.camera.position);
+    this.clouds.render(this.renderer, this.camera);
     this.skyDome.setOvercast(cloudCoverage);
 
     // Weather effects on sun and fog
@@ -454,5 +467,12 @@ export class Game {
     this.hud.update(pos.x, pos.y, pos.z, this.dayCycle.getTimeString());
 
     this.renderer.render(this.scene, this.camera);
+
+    // Screen-space rain overlay (composited on top)
+    if (this.rain.screenQuad.visible) {
+      this.renderer.autoClear = false;
+      this.renderer.render(this.screenOverlayScene, this.screenOverlayCamera);
+      this.renderer.autoClear = true;
+    }
   };
 }

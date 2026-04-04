@@ -16,6 +16,7 @@ startBtn.addEventListener('click', async () => {
     canvas.style.display = 'block';
 
     const game = new Game(canvas);
+    (window as any).__game = game;
     game.start();
   });
 });
