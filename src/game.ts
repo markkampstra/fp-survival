@@ -265,7 +265,7 @@ export class Game {
         <p style="margin-top: 1em; opacity: 0.7;">
           WASD to move &bull; Shift to sprint &bull; Mouse to look<br>
           E to interact &bull; Left-click to attack &bull; Tab for inventory<br>
-          C for crafting &bull; 1-6 for hotbar &bull; ESC to pause
+          C for crafting &bull; 1-6 for hotbar &bull; M toggle sound &bull; ESC to pause
         </p>
       </div>
     `;

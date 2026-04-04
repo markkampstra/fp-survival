@@ -4,19 +4,44 @@ export class AudioSystem {
   private ctx: AudioContext | null = null;
   private initialized = false;
   private masterGain: GainNode | null = null;
+  private muted = true; // default off
+  private muteIcon: HTMLDivElement;
 
   // Ambient sources
   private windGain: GainNode | null = null;
   private windSource: AudioBufferSourceNode | null = null;
 
   constructor() {
+    // Mute icon (shown when sound is off)
+    this.muteIcon = document.createElement('div');
+    this.muteIcon.style.cssText = `
+      position: fixed; top: 10px; left: 80px;
+      font-size: 18px; color: rgba(255,255,255,0.5);
+      pointer-events: none; z-index: 10;
+      font-family: sans-serif;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+    `;
+    this.muteIcon.textContent = '\u{1F507}'; // 🔇
+    document.body.appendChild(this.muteIcon);
+
+    // Toggle sound with M key
+    document.addEventListener('keydown', (e) => {
+      if (e.code === 'KeyM') {
+        this.muted = !this.muted;
+        if (this.masterGain) {
+          this.masterGain.gain.value = this.muted ? 0 : 0.3;
+        }
+        this.muteIcon.style.display = this.muted ? 'block' : 'none';
+      }
+    });
+
     // Initialize on first user interaction (browser autoplay policy)
     const init = () => {
       if (this.initialized) return;
       this.initialized = true;
       this.ctx = new AudioContext();
       this.masterGain = this.ctx.createGain();
-      this.masterGain.gain.value = 0.3;
+      this.masterGain.gain.value = this.muted ? 0 : 0.3;
       this.masterGain.connect(this.ctx.destination);
       this.startAmbient();
       document.removeEventListener('pointerdown', init);
