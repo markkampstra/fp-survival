@@ -173,4 +173,13 @@ export class WeatherSystem {
     events.emit('weather:changed', type);
     events.emit('weather:rain-changed', this.current.rainIntensity);
   }
+
+  serialize() {
+    return { type: this.type, intensity: this.current.rainIntensity, duration: this.duration };
+  }
+
+  deserialize(data: { type: string; intensity: number; duration: number }) {
+    this.forceWeather(data.type as WeatherType, data.intensity || undefined);
+    this.duration = data.duration;
+  }
 }

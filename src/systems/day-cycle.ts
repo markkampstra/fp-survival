@@ -222,4 +222,13 @@ export class DayCycle {
     this.time = t % 1;
     this.updateAll();
   }
+
+  setDay(d: number) { this.day = d; }
+
+  serialize() { return { dayTime: this.time, day: this.day }; }
+
+  deserialize(data: { dayTime: number; day: number }) {
+    this.day = data.day;
+    this.setTime(data.dayTime);
+  }
 }

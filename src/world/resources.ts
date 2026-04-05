@@ -194,4 +194,26 @@ export class ResourceManager {
       }
     }
   }
+
+  serialize(): { depleted: { index: number; respawnTimer: number }[] } {
+    const depleted: { index: number; respawnTimer: number }[] = [];
+    for (let i = 0; i < this.nodes.length; i++) {
+      if (this.nodes[i].depleted) {
+        depleted.push({ index: i, respawnTimer: this.nodes[i].respawnTimer });
+      }
+    }
+    return { depleted };
+  }
+
+  deserialize(data: { depleted: { index: number; respawnTimer: number }[] }) {
+    for (const entry of data.depleted) {
+      const node = this.nodes[entry.index];
+      if (node) {
+        node.depleted = true;
+        node.mesh.visible = false;
+        node.respawnTimer = entry.respawnTimer;
+        this.interaction.unregister(node.interactable);
+      }
+    }
+  }
 }

@@ -97,4 +97,18 @@ export class PlayerState {
   getMax(_stat: string): number {
     return 100;
   }
+
+  serialize() {
+    return { health: this.health, hunger: this.hunger, thirst: this.thirst, stamina: this.stamina };
+  }
+
+  deserialize(data: { health: number; hunger: number; thirst: number; stamina: number }) {
+    this.health = data.health;
+    this.hunger = data.hunger;
+    this.thirst = data.thirst;
+    this.stamina = data.stamina;
+    for (const stat of ['health', 'hunger', 'thirst', 'stamina'] as const) {
+      events.emit('player:stat-changed', stat, 0, this[stat]);
+    }
+  }
 }

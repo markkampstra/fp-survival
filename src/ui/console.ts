@@ -131,6 +131,8 @@ export class GameConsole {
           '  give <item> [qty]  Add item to inventory',
           '  items              List all item IDs',
           '  god                Toggle god mode (no stat drain)',
+          '  save               Save game now',
+          '  deletesave         Delete saved game',
           '  pos                Show player position',
           '  tp <x> <z>        Teleport to coordinates',
           '  speed <n>          Set move speed',
@@ -282,6 +284,16 @@ export class GameConsole {
 
       case 'clear':
         this.output.innerHTML = '';
+        break;
+
+      case 'save':
+        events.emit('console:save');
+        this.log('Game saved', '#2ecc71');
+        break;
+
+      case 'deletesave':
+        events.emit('console:deletesave');
+        this.log('Save deleted — refresh for new game', '#f1c40f');
         break;
 
       default:

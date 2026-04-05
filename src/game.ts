@@ -33,6 +33,8 @@ import { Clouds } from './world/clouds';
 import { LightningBolt } from './world/lightning';
 import { Stars } from './world/stars';
 import { Moon } from './world/moon';
+import { SaveSystem, type SaveData } from './systems/save-system';
+import { SaveUI } from './ui/save-ui';
 import { GameConsole } from './ui/console';
 
 export class Game {
@@ -69,6 +71,9 @@ export class Game {
   private skyDome: SkyDome;
   private screenOverlayScene: THREE.Scene;
   private screenOverlayCamera: THREE.OrthographicCamera;
+  private saveSystem: SaveSystem;
+  private saveUI: SaveUI;
+  private saveTimer = 0;
   private uiOpen = false;
   private springPos = new THREE.Vector3();
 
@@ -198,6 +203,8 @@ export class Game {
       (this.controls as any).sprintSpeed = spd * 1.7;
     });
 
+    events.on('console:save', () => this.saveGame());
+    events.on('console:deletesave', () => this.saveSystem.deleteSave());
     events.on('notification', (msg: string) => this.hud.showNotification(msg));
     events.on('tool:broke', () => this.hud.showNotification('Tool broke!'));
 
@@ -224,8 +231,22 @@ export class Game {
     // Fresh water spring
     this.createFreshWaterSpring();
 
-    // Debug setup
-    this.debugSetup();
+    // Save system
+    this.saveSystem = new SaveSystem();
+    this.saveUI = new SaveUI();
+
+    // Load existing save or run debug setup
+    if (this.saveSystem.hasSave()) {
+      const save = this.saveSystem.load();
+      if (save) {
+        this.applySave(save);
+      }
+    } else {
+      this.debugSetup();
+    }
+
+    // Auto-save on page unload
+    window.addEventListener('beforeunload', () => this.saveGame());
 
     // Instructions
     this.createInstructions(canvas);
@@ -479,6 +500,13 @@ export class Game {
       this.dayCycle.getPhase() === 'night'
     );
 
+    // Auto-save every 60 seconds
+    this.saveTimer += dt;
+    if (this.saveTimer >= 60) {
+      this.saveTimer = 0;
+      this.saveGame();
+    }
+
     const pos = this.camera.position;
     this.hud.update(pos.x, pos.y, pos.z, this.dayCycle.getTimeString());
 
@@ -492,4 +520,54 @@ export class Game {
 
     this.renderer.autoClear = true;
   };
+
+  private saveGame() {
+    const pos = this.camera.position;
+    const data: SaveData = {
+      version: 1,
+      timestamp: Date.now(),
+      player: {
+        position: [pos.x, pos.y, pos.z],
+        ...this.playerState.serialize(),
+      },
+      inventory: { slots: this.inventory.serialize() },
+      time: this.dayCycle.serialize(),
+      placeables: this.placeableManager.serialize(),
+      resources: this.resourceManager.serialize(),
+      animals: this.animalSystem.serialize(),
+      weather: this.weatherSystem.serialize(),
+    };
+    this.saveSystem.save(data);
+    this.saveUI.flash();
+  }
+
+  private applySave(data: SaveData) {
+    // Player position
+    this.camera.position.set(data.player.position[0], data.player.position[1], data.player.position[2]);
+
+    // Player stats
+    this.playerState.deserialize(data.player);
+
+    // Inventory
+    this.inventory.deserialize(data.inventory.slots);
+
+    // Time
+    this.dayCycle.deserialize(data.time);
+
+    // Weather
+    this.weatherSystem.deserialize(data.weather);
+
+    // Resources (depleted nodes)
+    this.resourceManager.deserialize(data.resources);
+
+    // Animals
+    if (data.animals) {
+      this.animalSystem.deserialize(data.animals);
+    }
+
+    // Placeables (campfires, shelters, storage boxes, water collectors)
+    if (data.placeables) {
+      this.placeableManager.deserializePlaceables(data.placeables);
+    }
+  }
 }

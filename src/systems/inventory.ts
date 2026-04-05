@@ -109,4 +109,17 @@ export class Inventory {
     }
     return false;
   }
+
+  serialize(): { itemId: string | null; quantity: number; durability?: number }[] {
+    return this.slots.map(s => ({ itemId: s.itemId, quantity: s.quantity, durability: s.durability }));
+  }
+
+  deserialize(data: { itemId: string | null; quantity: number; durability?: number }[]) {
+    for (let i = 0; i < Math.min(data.length, this.size); i++) {
+      this.slots[i].itemId = data[i].itemId;
+      this.slots[i].quantity = data[i].quantity;
+      this.slots[i].durability = data[i].durability;
+    }
+    events.emit('inventory:changed');
+  }
 }

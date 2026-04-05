@@ -240,4 +240,36 @@ export class PlaceableManager {
       }
     }
   }
+
+  serialize(): { id: string; position: [number, number, number]; userData?: Record<string, any> }[] {
+    return this.objects.map(obj => {
+      const ud: Record<string, any> = {};
+      if (obj.def.id === 'water_collector') {
+        ud.waterLevel = obj.userData.waterLevel ?? 0;
+      }
+      if (obj.def.id === 'storage_box' && obj.userData.storage) {
+        ud.storageSlots = (obj.userData.storage as Inventory).serialize();
+      }
+      return {
+        id: obj.def.id,
+        position: [obj.position.x, obj.position.y, obj.position.z] as [number, number, number],
+        userData: Object.keys(ud).length > 0 ? ud : undefined,
+      };
+    });
+  }
+
+  deserializePlaceables(data: { id: string; position: [number, number, number]; userData?: Record<string, any> }[]) {
+    for (const entry of data) {
+      const pos = new THREE.Vector3(entry.position[0], entry.position[1], entry.position[2]);
+      const obj = this.place(entry.id, pos);
+      if (obj && entry.userData) {
+        if (entry.userData.waterLevel !== undefined) {
+          obj.userData.waterLevel = entry.userData.waterLevel;
+        }
+        if (entry.userData.storageSlots && obj.userData.storage) {
+          (obj.userData.storage as Inventory).deserialize(entry.userData.storageSlots);
+        }
+      }
+    }
+  }
 }

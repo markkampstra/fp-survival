@@ -278,4 +278,29 @@ export class AnimalSystem {
     }
     this.group.add(animal.mesh);
   }
+
+  serialize(): { id: string; position: [number, number, number]; health: number; dead: boolean }[] {
+    return this.animals.map(a => ({
+      id: a.def.id,
+      position: [a.mesh.position.x, a.mesh.position.y, a.mesh.position.z] as [number, number, number],
+      health: a.health,
+      dead: a.dead,
+    }));
+  }
+
+  deserialize(data: { id: string; position: [number, number, number]; health: number; dead: boolean }[]) {
+    for (let i = 0; i < Math.min(data.length, this.animals.length); i++) {
+      const animal = this.animals[i];
+      const entry = data[i];
+      if (animal.def.id !== entry.id) continue; // skip mismatches
+      animal.health = entry.health;
+      animal.mesh.position.set(entry.position[0], entry.position[1], entry.position[2]);
+      if (entry.dead && !animal.dead) {
+        animal.dead = true;
+        animal.mesh.visible = false;
+        this.group.remove(animal.mesh);
+        setTimeout(() => this.respawnAnimal(animal), 60000);
+      }
+    }
+  }
 }
