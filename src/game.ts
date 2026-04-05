@@ -35,6 +35,9 @@ import { Stars } from './world/stars';
 import { Moon } from './world/moon';
 import { SaveSystem, type SaveData } from './systems/save-system';
 import { SaveUI } from './ui/save-ui';
+import { PostProcessing } from './rendering/post-processing';
+import { ArmorSystem } from './systems/armor-system';
+import { ProjectileSystem } from './systems/projectile-system';
 import { GameConsole } from './ui/console';
 
 export class Game {
@@ -73,6 +76,9 @@ export class Game {
   private screenOverlayCamera: THREE.OrthographicCamera;
   private saveSystem: SaveSystem;
   private saveUI: SaveUI;
+  private postProcessing: PostProcessing;
+  private armorSystem: ArmorSystem;
+  private projectileSystem: ProjectileSystem;
   private saveTimer = 0;
   private uiOpen = false;
   private springPos = new THREE.Vector3();
@@ -147,7 +153,7 @@ export class Game {
     this.placementSystem = new PlacementSystem(this.camera, this.terrain, this.scene, this.inventory, this.placeableManager);
 
     // Animals
-    this.animalSystem = new AnimalSystem(this.terrain, this.scene, this.camera, this.inventory);
+    this.animalSystem = new AnimalSystem(this.terrain, this.scene, this.camera, this.inventory, this.placeableManager);
 
     // Weather + rain + clouds + lightning
     this.weatherSystem = new WeatherSystem(this.dayCycle);
@@ -178,6 +184,21 @@ export class Game {
     // HUD
     this.hud = new HUD();
 
+    // Post-processing (bloom)
+    this.postProcessing = new PostProcessing(this.renderer, this.scene, this.camera);
+
+    // Combat systems
+    this.armorSystem = new ArmorSystem(this.inventory);
+    this.projectileSystem = new ProjectileSystem(this.scene);
+
+    // Armor intercepts damage before PlayerState applies it
+    // Override the event: PlayerState listens for player:take-damage,
+    // but we intercept with player:raw-damage first
+    events.on('player:raw-damage', (amount: number) => {
+      const reduced = this.armorSystem.reduceDamage(amount);
+      events.emit('player:take-damage', reduced);
+    });
+
     // Debug console
     new GameConsole(this.dayCycle, this.playerState, this.inventory, this.weatherSystem);
 
@@ -201,6 +222,19 @@ export class Game {
     events.on('console:speed', (spd: number) => {
       (this.controls as any).walkSpeed = spd;
       (this.controls as any).sprintSpeed = spd * 1.7;
+    });
+
+    // Hurt flash — red overlay when taking damage
+    const hurtOverlay = document.createElement('div');
+    hurtOverlay.style.cssText = `
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(200,0,0,0.3); pointer-events: none; z-index: 8;
+      opacity: 0; transition: opacity 0.1s ease;
+    `;
+    document.body.appendChild(hurtOverlay);
+    events.on('player:hurt-flash', () => {
+      hurtOverlay.style.opacity = '1';
+      setTimeout(() => { hurtOverlay.style.opacity = '0'; }, 150);
     });
 
     events.on('console:save', () => this.saveGame());
@@ -310,6 +344,10 @@ export class Game {
     this.inventory.addItem('stone_axe', 1);
     this.inventory.addItem('stone_pickaxe', 1);
     this.inventory.addItem('fishing_spear', 1);
+    this.inventory.addItem('bow', 1);
+    this.inventory.addItem('arrow', 10);
+    this.inventory.addItem('hide_armor', 1);
+    this.inventory.addItem('bone_club', 1);
     this.inventory.addItem('campfire_item', 2);
     this.inventory.addItem('shelter_item', 1);
     this.inventory.addItem('storage_box_item', 1);
@@ -415,6 +453,7 @@ export class Game {
     this.toolSystem.update(dt);
     this.resourceManager.update(dt);
     this.animalSystem.update(dt);
+    this.projectileSystem.update(dt);
     this.dayCycle.update(dt);
     this.weatherSystem.update(dt);
     this.rain.update(dt, this.camera.position, this.weatherSystem.getIntensity(), this.weatherSystem.getWindStrength(), this.camera);
@@ -507,10 +546,16 @@ export class Game {
       this.saveGame();
     }
 
+    // Bloom modulation: brighter during lightning, subtler during rain
+    let bloomStr = 0.4;
+    if (flash > 0) bloomStr += flash * 1.5;
+    if (rainIntensity > 0.3) bloomStr *= (1 - rainIntensity * 0.5);
+    this.postProcessing.setBloomStrength(bloomStr);
+
     const pos = this.camera.position;
     this.hud.update(pos.x, pos.y, pos.z, this.dayCycle.getTimeString());
 
-    this.renderer.render(this.scene, this.camera);
+    this.postProcessing.render();
 
     // Screen-space rain overlay (composited on top)
     if (this.rain.screenQuad.visible) {

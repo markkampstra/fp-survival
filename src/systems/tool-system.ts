@@ -50,8 +50,22 @@ export class ToolSystem {
       if (e.button === 0 && !this.placementActive) {
         const dir = new THREE.Vector3();
         this.camera.getWorldDirection(dir);
-        events.emit('tool:swing', this.camera.position.clone(), dir, this.getToolType());
-        this.triggerSwing();
+        const toolType = this.getToolType();
+
+        if (toolType === 'bow') {
+          // Fire arrow — consume ammo
+          if (this.inventory.hasItem('arrow')) {
+            this.inventory.removeItem('arrow', 1);
+            events.emit('projectile:fire', this.camera.position.clone(), dir);
+            this.useTool(); // durability
+            this.triggerSwing();
+          } else {
+            events.emit('notification', 'No arrows!');
+          }
+        } else {
+          events.emit('tool:swing', this.camera.position.clone(), dir, toolType);
+          this.triggerSwing();
+        }
       }
     });
 
@@ -158,6 +172,40 @@ export class ToolSystem {
       inner.add(lash);
 
       inner.rotation.z = 0.25; // slight tilt
+      inner.position.set(0, -0.05, 0);
+      group.add(inner);
+    } else if (def.toolType === 'club') {
+      const inner = new THREE.Group();
+      const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.035, 0.45, 6), handleMat);
+      inner.add(handle);
+      // Bulbous head
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.08, 6, 6), stoneMat);
+      head.position.y = 0.28;
+      head.scale.set(1, 1.3, 1);
+      inner.add(head);
+      inner.rotation.z = 0.35;
+      inner.position.set(0, 0.05, 0);
+      group.add(inner);
+    } else if (def.toolType === 'bow') {
+      const inner = new THREE.Group();
+      // Curved bow body (arc using tube)
+      const curve = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(0, -0.3, 0),
+        new THREE.Vector3(0.08, -0.1, 0),
+        new THREE.Vector3(0.1, 0.1, 0),
+        new THREE.Vector3(0.08, 0.3, 0),
+        new THREE.Vector3(0, 0.35, 0),
+      ]);
+      const bowGeo = new THREE.TubeGeometry(curve, 12, 0.015, 6, false);
+      const bowMesh = new THREE.Mesh(bowGeo, handleMat);
+      inner.add(bowMesh);
+      // String
+      const stringGeo = new THREE.CylinderGeometry(0.003, 0.003, 0.65, 4);
+      const stringMat = new THREE.MeshStandardMaterial({ color: 0xccccaa });
+      const string = new THREE.Mesh(stringGeo, stringMat);
+      string.position.set(0, 0.025, 0);
+      inner.add(string);
+      inner.rotation.z = 0.2;
       inner.position.set(0, -0.05, 0);
       group.add(inner);
     }

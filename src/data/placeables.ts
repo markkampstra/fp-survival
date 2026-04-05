@@ -43,7 +43,7 @@ function createCampfireMesh(): THREE.Object3D {
     group.add(stone);
   }
   const fireMat = new THREE.MeshStandardMaterial({
-    color: 0xff6600, emissive: 0xff4400, emissiveIntensity: 2,
+    color: 0xff6600, emissive: 0xff4400, emissiveIntensity: 4,
     transparent: true, opacity: 0.8, side: THREE.DoubleSide,
   });
   for (let i = 0; i < 3; i++) {

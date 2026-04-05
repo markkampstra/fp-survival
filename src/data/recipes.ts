@@ -83,4 +83,43 @@ export const RECIPES: Recipe[] = [
     result: { itemId: 'water_collector_item', quantity: 1 },
     craftTime: 0, category: 'building',
   },
+  // Phase 4 — Combat recipes
+  {
+    id: 'craft_hide_armor', name: 'Hide Armor', icon: 'Ha',
+    ingredients: [
+      { itemId: 'hide', quantity: 4 },
+      { itemId: 'rope', quantity: 2 },
+    ],
+    result: { itemId: 'hide_armor', quantity: 1 },
+    craftTime: 0, category: 'tools',
+  },
+  {
+    id: 'craft_bone_club', name: 'Bone Club', icon: 'Cb',
+    ingredients: [
+      { itemId: 'stick', quantity: 3 },
+      { itemId: 'stone', quantity: 2 },
+      { itemId: 'rope', quantity: 1 },
+    ],
+    result: { itemId: 'bone_club', quantity: 1 },
+    craftTime: 0, category: 'tools',
+  },
+  {
+    id: 'craft_bow', name: 'Bow', icon: 'Bw',
+    ingredients: [
+      { itemId: 'stick', quantity: 3 },
+      { itemId: 'rope', quantity: 2 },
+      { itemId: 'fiber', quantity: 1 },
+    ],
+    result: { itemId: 'bow', quantity: 1 },
+    craftTime: 0, category: 'tools',
+  },
+  {
+    id: 'craft_arrows', name: 'Arrows (x3)', icon: 'Ar',
+    ingredients: [
+      { itemId: 'stick', quantity: 1 },
+      { itemId: 'stone', quantity: 1 },
+    ],
+    result: { itemId: 'arrow', quantity: 3 },
+    craftTime: 0, category: 'tools',
+  },
 ];

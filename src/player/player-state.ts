@@ -30,6 +30,16 @@ export class PlayerState {
 
   _godMode = false;
 
+  constructor() {
+    // Take damage from hostile creatures
+    events.on('player:take-damage', (amount: number) => {
+      if (this._godMode || this.dead) return;
+      this.modifyStat('health', -amount);
+      events.emit('player:hurt-flash');
+      events.emit('notification', `Took ${amount} damage!`);
+    });
+  }
+
   update(dt: number, isSprinting: boolean) {
     if (this.dead) return;
     if (this._godMode) return;

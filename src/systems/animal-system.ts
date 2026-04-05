@@ -2,8 +2,10 @@ import * as THREE from 'three';
 import { events } from '../core/event-bus';
 import { ANIMALS, type AnimalDef } from '../data/animals';
 import { createCrabMesh, createFishMesh, createBoarMesh } from '../world/animals';
+import { createWolfMesh, createSnakeMesh } from '../world/hostile-animals';
 import type { Terrain } from '../world/terrain';
 import type { Inventory } from './inventory';
+import type { PlaceableManager } from '../world/placeables';
 
 interface ActiveAnimal {
   def: AnimalDef;
@@ -12,53 +14,105 @@ interface ActiveAnimal {
   dead: boolean;
   deathTimer: number;
   // AI state
-  state: 'idle' | 'wander' | 'flee';
+  state: 'idle' | 'wander' | 'flee' | 'chase' | 'attack' | 'cooldown';
   stateTimer: number;
   target: THREE.Vector3;
   homePos: THREE.Vector3;
-  patrolAngle: number; // for fish
+  patrolAngle: number;
+  attackTimer: number;
+  isNightSpawn: boolean;
 }
 
 const MESH_FACTORIES: Record<string, () => THREE.Group> = {
   crab: createCrabMesh,
   fish: createFishMesh,
   boar: createBoarMesh,
+  wolf: createWolfMesh,
+  snake: createSnakeMesh,
 };
 
 export class AnimalSystem {
   private animals: ActiveAnimal[] = [];
   private group: THREE.Group;
   private tmpVec = new THREE.Vector3();
+  private nightSpawned = false;
 
   constructor(
     private terrain: Terrain,
     private scene: THREE.Scene,
     private camera: THREE.Camera,
     private inventory: Inventory,
+    private placeableManager?: PlaceableManager,
   ) {
     this.group = new THREE.Group();
     this.scene.add(this.group);
 
     this.spawnAll();
 
-    // Listen for tool swings (left-click attack)
     events.on('tool:swing', (pos: THREE.Vector3, dir: THREE.Vector3, toolType: string | null) => {
       this.handleAttack(pos, dir, toolType);
+    });
+
+    // Projectile hit detection (arrows)
+    events.on('projectile:check-hit', (pos: THREE.Vector3, radius: number) => {
+      for (const animal of this.animals) {
+        if (animal.dead) continue;
+        const dx = pos.x - animal.mesh.position.x;
+        const dz = pos.z - animal.mesh.position.z;
+        const dy = pos.y - animal.mesh.position.y;
+        if (dx * dx + dz * dz + dy * dy < radius * radius) {
+          animal.health -= 15; // arrow damage
+          events.emit('notification', `Arrow hit ${animal.def.name}! (${Math.max(0, animal.health)} HP)`);
+          if (animal.health <= 0) this.killAnimal(animal);
+          break;
+        }
+      }
+    });
+
+    // Night spawn/despawn for hostile creatures
+    events.on('daycycle:phase-changed', (phase: string) => {
+      if ((phase === 'night' || phase === 'dusk') && !this.nightSpawned) {
+        this.spawnNightCreatures();
+        this.nightSpawned = true;
+      } else if (phase === 'dawn' && this.nightSpawned) {
+        this.despawnNightCreatures();
+        this.nightSpawned = false;
+      }
     });
   }
 
   private spawnAll() {
     for (const def of Object.values(ANIMALS)) {
+      if (def.nightOnly) continue; // hostile night creatures spawn separately
       const factory = MESH_FACTORIES[def.id];
       if (!factory) continue;
-
       for (let i = 0; i < def.spawnCount; i++) {
-        this.spawnAnimal(def, factory);
+        this.spawnAnimal(def, factory, false);
       }
     }
   }
 
-  private spawnAnimal(def: AnimalDef, factory: () => THREE.Group) {
+  private spawnNightCreatures() {
+    for (const def of Object.values(ANIMALS)) {
+      if (!def.nightOnly) continue;
+      const factory = MESH_FACTORIES[def.id];
+      if (!factory) continue;
+      for (let i = 0; i < def.spawnCount; i++) {
+        this.spawnAnimal(def, factory, true);
+      }
+    }
+    events.emit('notification', 'You hear creatures stirring in the dark...');
+  }
+
+  private despawnNightCreatures() {
+    const toRemove = this.animals.filter(a => a.isNightSpawn);
+    for (const animal of toRemove) {
+      this.group.remove(animal.mesh);
+    }
+    this.animals = this.animals.filter(a => !a.isNightSpawn);
+  }
+
+  private spawnAnimal(def: AnimalDef, factory: () => THREE.Group, isNightSpawn: boolean) {
     let x: number, z: number, h: number;
     let attempts = 0;
     const mapHalf = 200;
@@ -90,6 +144,8 @@ export class AnimalSystem {
       target: new THREE.Vector3(x, y, z),
       homePos: new THREE.Vector3(x, y, z),
       patrolAngle: Math.random() * Math.PI * 2,
+      attackTimer: 0,
+      isNightSpawn,
     });
   }
 
@@ -173,7 +229,67 @@ export class AnimalSystem {
         case 'patrol':
           this.updatePatrol(animal, dt);
           break;
+        case 'hostile':
+          this.updateHostile(animal, dt, playerPos);
+          break;
       }
+    }
+  }
+
+  private updateHostile(animal: ActiveAnimal, dt: number, playerPos: THREE.Vector3) {
+    const def = animal.def;
+    const dx = playerPos.x - animal.mesh.position.x;
+    const dz = playerPos.z - animal.mesh.position.z;
+    const distSq = dx * dx + dz * dz;
+    const dist = Math.sqrt(distSq);
+
+    // Check if near a campfire — wolves flee from fire
+    if (def.fearsFire && this.placeableManager) {
+      const fireRadius = def.fearsFireRadius ?? 8;
+      for (const obj of this.placeableManager.getObjects()) {
+        if (obj.def.id !== 'campfire') continue;
+        const fdx = animal.mesh.position.x - obj.position.x;
+        const fdz = animal.mesh.position.z - obj.position.z;
+        if (fdx * fdx + fdz * fdz < fireRadius * fireRadius) {
+          // Flee from fire
+          animal.target.set(
+            animal.mesh.position.x + fdx * 2,
+            0,
+            animal.mesh.position.z + fdz * 2
+          );
+          this.moveToward(animal, animal.target, def.speed * 1.5, dt);
+          return;
+        }
+      }
+    }
+
+    animal.attackTimer = Math.max(0, animal.attackTimer - dt);
+
+    if (animal.state === 'attack' || animal.state === 'cooldown') {
+      if (animal.attackTimer <= 0 && dist < 2) {
+        // Attack the player
+        events.emit('player:raw-damage', def.attackDamage ?? 10);
+        animal.attackTimer = def.attackCooldown ?? 1.5;
+        animal.state = 'cooldown';
+        animal.stateTimer = def.attackCooldown ?? 1.5;
+      } else if (dist > 2.5) {
+        animal.state = 'chase';
+      } else if (animal.stateTimer <= 0) {
+        animal.state = 'chase';
+      }
+    } else if (dist < (def.aggroRange ?? 15)) {
+      // Chase the player
+      animal.state = 'chase';
+      animal.target.set(playerPos.x, 0, playerPos.z);
+      this.moveToward(animal, animal.target, def.speed, dt);
+
+      if (dist < 1.5 && animal.attackTimer <= 0) {
+        animal.state = 'attack';
+        animal.stateTimer = 0;
+      }
+    } else {
+      // Idle/wander when player is far
+      this.updateWander(animal, dt);
     }
   }
 

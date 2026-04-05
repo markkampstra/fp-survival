@@ -1,29 +1,25 @@
 import * as THREE from 'three';
 import { fbm } from '../utils/noise';
+import { getBiomeColor } from './biome';
 
-const SIZE = 500;
-const SEGMENTS = 256;
+export const TERRAIN_SIZE = 500;
+export const TERRAIN_SEGMENTS = 256;
 const MAX_HEIGHT = 40;
 const ISLAND_RADIUS = 200;
 
 export class Terrain {
   readonly mesh: THREE.Mesh;
-  private heightData: Float32Array;
+  readonly heightData: Float32Array;
   private geometry: THREE.PlaneGeometry;
 
   constructor() {
-    this.geometry = new THREE.PlaneGeometry(SIZE, SIZE, SEGMENTS, SEGMENTS);
+    this.geometry = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, TERRAIN_SEGMENTS, TERRAIN_SEGMENTS);
     this.geometry.rotateX(-Math.PI / 2);
 
-    this.heightData = new Float32Array((SEGMENTS + 1) * (SEGMENTS + 1));
+    this.heightData = new Float32Array((TERRAIN_SEGMENTS + 1) * (TERRAIN_SEGMENTS + 1));
 
     const positions = this.geometry.attributes.position;
     const colors: number[] = [];
-
-    const sandColor = new THREE.Color(0xc2b280);
-    const grassColor = new THREE.Color(0x4a7c2f);
-    const rockColor = new THREE.Color(0x6b6b6b);
-    const tmpColor = new THREE.Color();
 
     for (let i = 0; i < positions.count; i++) {
       const x = positions.getX(i);
@@ -41,18 +37,9 @@ export class Terrain {
       positions.setY(i, height);
       this.heightData[i] = height;
 
-      // Vertex colors based on height
-      if (height < 1.5) {
-        tmpColor.copy(sandColor);
-      } else if (height < 15) {
-        const t = (height - 1.5) / 13.5;
-        tmpColor.copy(sandColor).lerp(grassColor, Math.min(t * 2, 1));
-      } else {
-        const t = (height - 15) / (MAX_HEIGHT - 15);
-        tmpColor.copy(grassColor).lerp(rockColor, t);
-      }
-
-      colors.push(tmpColor.r, tmpColor.g, tmpColor.b);
+      // Biome-based vertex colors
+      const biomeColor = getBiomeColor(height, noise);
+      colors.push(biomeColor.r, biomeColor.g, biomeColor.b);
     }
 
     this.geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
@@ -82,8 +69,8 @@ export class Terrain {
 
   getHeightAt(x: number, z: number): number {
     // Convert world coords to grid coords
-    const gridX = ((x + SIZE / 2) / SIZE) * SEGMENTS;
-    const gridZ = ((z + SIZE / 2) / SIZE) * SEGMENTS;
+    const gridX = ((x + TERRAIN_SIZE / 2) / TERRAIN_SIZE) * TERRAIN_SEGMENTS;
+    const gridZ = ((z + TERRAIN_SIZE / 2) / TERRAIN_SIZE) * TERRAIN_SEGMENTS;
 
     const ix = Math.floor(gridX);
     const iz = Math.floor(gridZ);
@@ -91,12 +78,12 @@ export class Terrain {
     const fz = gridZ - iz;
 
     // Clamp to valid range
-    const ix0 = Math.max(0, Math.min(SEGMENTS, ix));
-    const ix1 = Math.max(0, Math.min(SEGMENTS, ix + 1));
-    const iz0 = Math.max(0, Math.min(SEGMENTS, iz));
-    const iz1 = Math.max(0, Math.min(SEGMENTS, iz + 1));
+    const ix0 = Math.max(0, Math.min(TERRAIN_SEGMENTS, ix));
+    const ix1 = Math.max(0, Math.min(TERRAIN_SEGMENTS, ix + 1));
+    const iz0 = Math.max(0, Math.min(TERRAIN_SEGMENTS, iz));
+    const iz1 = Math.max(0, Math.min(TERRAIN_SEGMENTS, iz + 1));
 
-    const stride = SEGMENTS + 1;
+    const stride = TERRAIN_SEGMENTS + 1;
     const h00 = this.heightData[iz0 * stride + ix0];
     const h10 = this.heightData[iz0 * stride + ix1];
     const h01 = this.heightData[iz1 * stride + ix0];

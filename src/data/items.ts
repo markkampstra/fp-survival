@@ -3,7 +3,7 @@ export interface ItemDef {
   name: string;
   icon: string;       // Short label (1-3 chars) displayed on the colored badge
   iconColor: string;  // Background color for the badge
-  category: 'resource' | 'tool' | 'food' | 'placeable' | 'container';
+  category: 'resource' | 'tool' | 'food' | 'placeable' | 'container' | 'armor';
   stackSize: number;
   description: string;
   foodValue?: number;
@@ -11,6 +11,7 @@ export interface ItemDef {
   toolType?: string;
   toolTier?: number;
   maxDurability?: number;
+  armorValue?: number;
 }
 
 export const ITEMS: Record<string, ItemDef> = {
@@ -122,5 +123,25 @@ export const ITEMS: Record<string, ItemDef> = {
   water_collector_item: {
     id: 'water_collector_item', name: 'Water Collector', icon: 'Wc', iconColor: '#1A5276',
     category: 'placeable', stackSize: 1, description: 'Collects clean water over time',
+  },
+  // Phase 4 — Combat items
+  hide_armor: {
+    id: 'hide_armor', name: 'Hide Armor', icon: 'Ha', iconColor: '#7D5A38',
+    category: 'armor', stackSize: 1, description: 'Reduces incoming damage',
+    armorValue: 5, maxDurability: 100,
+  },
+  bone_club: {
+    id: 'bone_club', name: 'Bone Club', icon: 'Cb', iconColor: '#8B7355',
+    category: 'tool', stackSize: 1, description: 'Heavy melee weapon',
+    toolType: 'club', toolTier: 1, maxDurability: 40,
+  },
+  bow: {
+    id: 'bow', name: 'Bow', icon: 'Bw', iconColor: '#6B4226',
+    category: 'tool', stackSize: 1, description: 'Ranged weapon — uses arrows',
+    toolType: 'bow', toolTier: 1, maxDurability: 60,
+  },
+  arrow: {
+    id: 'arrow', name: 'Arrow', icon: 'Ar', iconColor: '#5D4E37',
+    category: 'resource', stackSize: 20, description: 'Ammunition for bow',
   },
 };
