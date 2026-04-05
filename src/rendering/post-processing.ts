@@ -18,7 +18,8 @@ export class PostProcessing {
       Math.floor(window.innerWidth / 2),
       Math.floor(window.innerHeight / 2)
     );
-    this.bloomPass = new UnrealBloomPass(resolution, 0.4, 0.3, 0.85);
+    this.bloomPass = new UnrealBloomPass(resolution, 0.3, 0.3, 4.0);
+    this.bloomPass.enabled = false; // disabled — Sky shader HDR blows out
     this.composer.addPass(this.bloomPass);
 
     window.addEventListener('resize', () => {

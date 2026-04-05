@@ -24,7 +24,7 @@ export function createWolfMesh(): THREE.Group {
 
   // Glowing red eyes (triggers bloom)
   const eyeMat = new THREE.MeshStandardMaterial({
-    color: 0xff0000, emissive: 0xff2200, emissiveIntensity: 3,
+    color: 0xff0000, emissive: 0xff2200, emissiveIntensity: 6,
   });
   for (const side of [-0.1, 0.1]) {
     const eye = new THREE.Mesh(new THREE.SphereGeometry(0.03, 6, 4), eyeMat);

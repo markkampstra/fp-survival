@@ -10,10 +10,10 @@ export class SkyDome {
     this.sky.scale.setScalar(10000);
 
     const uniforms = this.sky.material.uniforms;
-    uniforms['turbidity'].value = 8;
+    uniforms['turbidity'].value = 4;
     uniforms['rayleigh'].value = 3;
-    uniforms['mieCoefficient'].value = 0.005;
-    uniforms['mieDirectionalG'].value = 0.85;
+    uniforms['mieCoefficient'].value = 0.003;
+    uniforms['mieDirectionalG'].value = 0.75;
 
     // Sun position: tropical midday
     const elevation = 45;

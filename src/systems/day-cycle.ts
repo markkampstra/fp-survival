@@ -144,7 +144,7 @@ export class DayCycle {
       const t = (10 - sunElev) / 20;
       this.renderer.toneMappingExposure = 0.7 + t * 1.0; // 0.7 → 1.7
     } else {
-      this.renderer.toneMappingExposure = 1.7; // much brighter night
+      this.renderer.toneMappingExposure = 1.7;
     }
   }
 
