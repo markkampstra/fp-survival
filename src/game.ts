@@ -38,6 +38,9 @@ import { SaveUI } from './ui/save-ui';
 import { PostProcessing } from './rendering/post-processing';
 import { ArmorSystem } from './systems/armor-system';
 import { ProjectileSystem } from './systems/projectile-system';
+import { Shipwreck } from './world/shipwreck';
+import { Minimap } from './ui/minimap';
+import { ObjectiveTracker } from './ui/objectives';
 import { GameConsole } from './ui/console';
 
 export class Game {
@@ -79,6 +82,9 @@ export class Game {
   private postProcessing: PostProcessing;
   private armorSystem: ArmorSystem;
   private projectileSystem: ProjectileSystem;
+  private shipwreck: Shipwreck;
+  private minimap: Minimap;
+  private objectives: ObjectiveTracker;
   private saveTimer = 0;
   private uiOpen = false;
   private springPos = new THREE.Vector3();
@@ -190,6 +196,16 @@ export class Game {
     // Combat systems
     this.armorSystem = new ArmorSystem(this.inventory);
     this.projectileSystem = new ProjectileSystem(this.scene);
+
+    // Shipwreck POI
+    this.shipwreck = new Shipwreck(this.terrain, this.scene, this.interactionSystem, this.inventory);
+
+    // Minimap
+    this.minimap = new Minimap(this.terrain, this.placeableManager);
+
+    // Objectives
+    this.objectives = new ObjectiveTracker(this.inventory, this.dayCycle);
+    this.objectives.listenPlaceables();
 
     // Armor intercepts damage before PlayerState applies it
     // Override the event: PlayerState listens for player:take-damage,
@@ -546,6 +562,9 @@ export class Game {
       this.saveGame();
     }
 
+    // Minimap
+    this.minimap.update(dt, this.camera.position.x, this.camera.position.z, this.camera.rotation.y);
+
     // Bloom modulation: brighter during lightning, subtler during rain
     let bloomStr = 0.4;
     if (flash > 0) bloomStr += flash * 1.5;
@@ -581,7 +600,9 @@ export class Game {
       resources: this.resourceManager.serialize(),
       animals: this.animalSystem.serialize(),
       weather: this.weatherSystem.serialize(),
-    };
+      shipwreck: this.shipwreck.serialize(),
+      objectives: { completedIndex: this.objectives.getCompletedIndex() },
+    } as any;
     this.saveSystem.save(data);
     this.saveUI.flash();
   }
@@ -613,6 +634,16 @@ export class Game {
     // Placeables (campfires, shelters, storage boxes, water collectors)
     if (data.placeables) {
       this.placeableManager.deserializePlaceables(data.placeables);
+    }
+
+    // Shipwreck loot state
+    if ((data as any).shipwreck) {
+      this.shipwreck.deserialize((data as any).shipwreck);
+    }
+
+    // Objectives progress
+    if ((data as any).objectives) {
+      this.objectives.setCompletedIndex((data as any).objectives.completedIndex);
     }
   }
 }
