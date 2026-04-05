@@ -31,12 +31,14 @@ import { StorageUI } from './ui/storage-ui';
 import { SleepOverlay } from './ui/sleep-overlay';
 import { Clouds } from './world/clouds';
 import { LightningBolt } from './world/lightning';
+import { Stars } from './world/stars';
+import { Moon } from './world/moon';
 import { GameConsole } from './ui/console';
 
 export class Game {
   private renderer: THREE.WebGLRenderer;
   private scene: THREE.Scene;
-  private camera: THREE.PerspectiveCamera;
+  camera: THREE.PerspectiveCamera; // public for debug
   private clock: THREE.Clock;
   private controls: FirstPersonControls;
   private terrain: Terrain;
@@ -52,7 +54,7 @@ export class Game {
   private craftingUI: CraftingUI;
   private toolSystem: ToolSystem;
   private resourceManager: ResourceManager;
-  private dayCycle: DayCycle;
+  dayCycle: DayCycle; // public for debug
   private placeableManager: PlaceableManager;
   private placementSystem: PlacementSystem;
   private animalSystem: AnimalSystem;
@@ -62,6 +64,8 @@ export class Game {
   private sleepOverlay: SleepOverlay;
   private clouds: Clouds;
   private lightning: LightningBolt;
+  stars: Stars;        // public for debug
+  moonDisc: Moon;      // public for debug
   private skyDome: SkyDome;
   private screenOverlayScene: THREE.Scene;
   private screenOverlayCamera: THREE.OrthographicCamera;
@@ -148,6 +152,9 @@ export class Game {
     this.clouds = new Clouds(this.renderer);
     this.scene.add(this.clouds.mesh);
     this.lightning = new LightningBolt(this.scene);
+    this.stars = new Stars();
+    this.scene.add(this.stars.mesh);
+    this.moonDisc = new Moon(); // renders as HTML overlay, not in Three.js scene
 
     // Persistent screen overlay scene for rain post-pass
     this.screenOverlayScene = new THREE.Scene();
@@ -397,6 +404,15 @@ export class Game {
     this.sun.followPlayer(this.camera.position);
     this.dayCycle.followPlayer(this.camera.position);
 
+    // Stars and moon
+    const sunElev = this.dayCycle.getSunElevation();
+    this.stars.update(dt, sunElev, this.weatherSystem.getCloudCoverage());
+    this.stars.follow(this.camera.position);
+    this.moonDisc.update(
+      this.dayCycle.getDay(), this.dayCycle.getTime(),
+      sunElev, this.camera.position, this.camera
+    );
+
     // Volumetric clouds — render to half-res target, then composite
     const cloudCoverage = this.weatherSystem.getCloudCoverage();
     const windStrength = this.weatherSystem.getWindStrength();
@@ -472,7 +488,8 @@ export class Game {
     if (this.rain.screenQuad.visible) {
       this.renderer.autoClear = false;
       this.renderer.render(this.screenOverlayScene, this.screenOverlayCamera);
-      this.renderer.autoClear = true;
     }
+
+    this.renderer.autoClear = true;
   };
 }

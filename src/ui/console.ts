@@ -119,6 +119,7 @@ export class GameConsole {
         this.log([
           'Commands:',
           '  time <0-24>        Set time of day (e.g. time 0 = midnight, time 12 = noon)',
+          '  setday <n>         Set game day (moon phase: 0/30=new, 15=full)',
           '  night              Set time to midnight',
           '  day                Set time to noon',
           '  dawn               Set time to dawn',
@@ -167,6 +168,17 @@ export class GameConsole {
         this.dayCycle.setTime(0.75);
         this.log('Time set to dusk', '#2ecc71');
         break;
+
+      case 'setday': {
+        const d = parseInt(args[0]);
+        if (isNaN(d) || d < 1) {
+          this.log('Usage: setday <number> (moon: 0/30=new, 8=first quarter, 15=full, 22=last quarter)', '#e74c3c');
+          break;
+        }
+        (this.dayCycle as any).day = d;
+        this.log(`Day set to ${d} (moon phase: ${((d % 30) / 30 * 100).toFixed(0)}%)`, '#2ecc71');
+        break;
+      }
 
       case 'rain': {
         const intensity = args[0] !== undefined ? parseFloat(args[0]) : 0.8;

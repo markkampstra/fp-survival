@@ -100,10 +100,16 @@ export class DayCycle {
   }
 
   private updateMoon(sunElev: number) {
-    // Moon arcs opposite the sun
-    const moonTime = (this.time + 0.5) % 1;
+    // Realistic lunar cycle: moon position depends on phase (day in 30-day cycle)
+    // At new moon (day 0/30): moon near sun, rises/sets with sun
+    // At full moon (day 15): moon opposite sun, rises at sunset
+    // At first quarter (day 7): moon 90° ahead, high at sunset
+    const lunarPhase = (this.day % 30) / 30; // 0-1 over 30-day cycle
+    const moonLag = lunarPhase; // how far behind/offset from sun
+
+    const moonTime = (this.time + moonLag * 0.5) % 1;
     const moonAngle = (moonTime - 0.25) * Math.PI * 2;
-    const elevation = Math.sin(moonAngle) * 65;
+    const elevation = Math.sin(moonAngle) * 60;
     const azimuth = 90 + (moonTime - 0.25) * 360;
 
     const phi = THREE.MathUtils.degToRad(90 - Math.max(elevation, 0));
@@ -115,27 +121,30 @@ export class DayCycle {
     this.moonLight.target.position.set(0, 0, 0);
     this.moonLight.target.updateMatrixWorld();
 
-    // Moon intensity: strong when moon is up and sun is down
+    // Illumination based on lunar phase: 0 at new, 1 at full
+    const illumination = (1 - Math.cos(lunarPhase * Math.PI * 2)) / 2;
+
+    // Moon light intensity: brighter so terrain is navigable at night
     if (elevation > 0 && sunElev < 5) {
-      const moonStrength = Math.min(elevation / 15, 1); // ramps up as moon rises
-      const sunGone = Math.min(Math.max((5 - sunElev) / 10, 0), 1); // 1 when sun fully set
-      this.moonLight.intensity = 1.0 * moonStrength * sunGone;
-      this.moonLight.castShadow = this.moonLight.intensity > 0.2;
+      const moonStrength = Math.min(elevation / 15, 1);
+      const sunGone = Math.min(Math.max((5 - sunElev) / 10, 0), 1);
+      this.moonLight.intensity = 1.8 * illumination * moonStrength * sunGone;
+      this.moonLight.castShadow = this.moonLight.intensity > 0.15;
     } else {
       this.moonLight.intensity = 0;
       this.moonLight.castShadow = false;
     }
   }
 
-  /** Adjust tone mapping exposure — brighter during day, compensate at night */
+  /** Adjust tone mapping exposure — brighter during day, navigable at night */
   private updateExposure(sunElev: number) {
     if (sunElev > 10) {
-      this.renderer.toneMappingExposure = 0.7; // bright sunny day
+      this.renderer.toneMappingExposure = 0.7;
     } else if (sunElev > -10) {
       const t = (10 - sunElev) / 20;
-      this.renderer.toneMappingExposure = 0.7 + t * 0.6; // 0.7 → 1.3
+      this.renderer.toneMappingExposure = 0.7 + t * 1.0; // 0.7 → 1.7
     } else {
-      this.renderer.toneMappingExposure = 1.3;
+      this.renderer.toneMappingExposure = 1.7; // much brighter night
     }
   }
 
@@ -150,10 +159,10 @@ export class DayCycle {
 
   private updateAmbient(sunElev: number) {
     if (sunElev < -5) {
-      // Night: blue-ish moonlit ambient
-      this.ambient.intensity = 0.45;
-      this.ambient.color.setHex(0x5577bb);
-      this.ambient.groundColor.setHex(0x223355);
+      // Night: brighter blue-ish ambient so terrain is navigable
+      this.ambient.intensity = 0.6;
+      this.ambient.color.setHex(0x6688cc);
+      this.ambient.groundColor.setHex(0x334466);
     } else if (sunElev < 5) {
       // Dawn/dusk transition
       const t = (sunElev + 5) / 10; // 0 = full night, 1 = full day transition
