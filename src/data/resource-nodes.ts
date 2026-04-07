@@ -13,38 +13,67 @@ export interface ResourceNodeDef {
   spawnCount: number;
 }
 
+// Shared materials
+const stoneMat = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.7 });
+const stoneDarkMat = new THREE.MeshStandardMaterial({ color: 0x666666, roughness: 0.75 });
+const stickMat = new THREE.MeshStandardMaterial({ color: 0x8b6914, roughness: 0.9 });
+const stickDarkMat = new THREE.MeshStandardMaterial({ color: 0x6b5010, roughness: 0.95 });
+const fiberMat = new THREE.MeshStandardMaterial({ color: 0x3a7d2a, roughness: 0.75, side: THREE.DoubleSide });
+const fiberDarkMat = new THREE.MeshStandardMaterial({ color: 0x2a5d1a, roughness: 0.8, side: THREE.DoubleSide });
+const bottleBodyMat = new THREE.MeshStandardMaterial({ color: 0x88ccee, transparent: true, opacity: 0.55, roughness: 0.1, metalness: 0.1 });
+const bottleCapMat = new THREE.MeshStandardMaterial({ color: 0x2266ff, roughness: 0.5 });
+
 function makeStone(): THREE.Object3D {
-  const geo = new THREE.SphereGeometry(0.3, 6, 4);
-  geo.scale(1, 0.6, 1);
-  const mat = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.9 });
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.castShadow = true;
-  return mesh;
+  const group = new THREE.Group();
+  // Main rock — irregular by combining 2 scaled spheres
+  const main = new THREE.Mesh(new THREE.SphereGeometry(0.3, 5, 4), stoneMat);
+  main.scale.set(1, 0.55, 0.85);
+  main.castShadow = true;
+  group.add(main);
+  // Secondary bump for irregular shape
+  const bump = new THREE.Mesh(new THREE.SphereGeometry(0.15, 4, 3), stoneDarkMat);
+  bump.position.set(0.08, 0.05, 0.06);
+  bump.scale.set(1, 0.6, 0.8);
+  group.add(bump);
+  return group;
 }
 
 function makeStick(): THREE.Object3D {
-  const geo = new THREE.CylinderGeometry(0.03, 0.03, 1.2, 4);
-  const mat = new THREE.MeshStandardMaterial({ color: 0x8b6914, roughness: 0.9 });
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.rotation.z = Math.PI / 2;
-  mesh.rotation.y = Math.random() * Math.PI;
-  mesh.castShadow = true;
-  return mesh;
+  const group = new THREE.Group();
+  // Main stick
+  const main = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.03, 1.2, 5), stickMat);
+  main.rotation.z = Math.PI / 2;
+  main.rotation.y = Math.random() * Math.PI;
+  main.castShadow = true;
+  group.add(main);
+  // Small branch stub
+  const branch = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.015, 0.2, 4), stickDarkMat);
+  branch.position.set(0.15, 0.06, 0);
+  branch.rotation.z = 0.8;
+  group.add(branch);
+  return group;
 }
 
 function makeFiberPlant(): THREE.Object3D {
   const group = new THREE.Group();
-  const mat = new THREE.MeshStandardMaterial({ color: 0x3a7d2a, roughness: 0.8, side: THREE.DoubleSide });
-  for (let i = 0; i < 5; i++) {
-    const geo = new THREE.PlaneGeometry(0.3, 0.8);
-    const blade = new THREE.Mesh(geo, mat);
+  // Root base — small brown mound
+  const base = new THREE.Mesh(new THREE.SphereGeometry(0.08, 5, 3), stickDarkMat);
+  base.scale.set(1.5, 0.4, 1.5);
+  base.position.y = 0.02;
+  group.add(base);
+  // Leaf blades — varying heights and angles
+  for (let i = 0; i < 7; i++) {
+    const angle = (i / 7) * Math.PI * 2 + Math.random() * 0.3;
+    const h = 0.5 + Math.random() * 0.4;
+    const mat = i % 2 === 0 ? fiberMat : fiberDarkMat;
+    const blade = new THREE.Mesh(new THREE.PlaneGeometry(0.15, h), mat);
     blade.position.set(
-      (Math.random() - 0.5) * 0.3,
-      0.4,
-      (Math.random() - 0.5) * 0.3
+      Math.cos(angle) * 0.08,
+      h * 0.45,
+      Math.sin(angle) * 0.08
     );
-    blade.rotation.y = Math.random() * Math.PI;
-    blade.rotation.x = -0.2 + Math.random() * 0.4;
+    blade.rotation.y = angle;
+    blade.rotation.x = -0.15 + Math.random() * 0.3;
     group.add(blade);
   }
   return group;
@@ -52,17 +81,20 @@ function makeFiberPlant(): THREE.Object3D {
 
 function makeRockDeposit(): THREE.Object3D {
   const group = new THREE.Group();
-  const mat = new THREE.MeshStandardMaterial({ color: 0x666666, roughness: 0.85 });
-  for (let i = 0; i < 3; i++) {
-    const geo = new THREE.SphereGeometry(0.4 + Math.random() * 0.3, 6, 4);
-    geo.scale(1, 0.7, 1);
-    const rock = new THREE.Mesh(geo, mat);
+  // Cluster of 4-5 rocks, varying sizes
+  const rockCount = 4 + Math.floor(Math.random() * 2);
+  for (let i = 0; i < rockCount; i++) {
+    const mat = i % 2 === 0 ? stoneMat : stoneDarkMat;
+    const size = 0.25 + Math.random() * 0.35;
+    const rock = new THREE.Mesh(new THREE.SphereGeometry(size, 5, 4), mat);
+    rock.scale.set(1, 0.6 + Math.random() * 0.2, 0.8 + Math.random() * 0.2);
     rock.position.set(
-      (Math.random() - 0.5) * 0.6,
-      0,
-      (Math.random() - 0.5) * 0.6
+      (Math.random() - 0.5) * 0.7,
+      size * 0.3,
+      (Math.random() - 0.5) * 0.7
     );
-    rock.castShadow = true;
+    rock.rotation.y = Math.random() * Math.PI;
+    if (i < 2) rock.castShadow = true; // only largest rocks cast shadows
     group.add(rock);
   }
   return group;
@@ -70,22 +102,27 @@ function makeRockDeposit(): THREE.Object3D {
 
 function makeWaterBottle(): THREE.Object3D {
   const group = new THREE.Group();
-  // Body
-  const body = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.06, 0.06, 0.25, 8),
-    new THREE.MeshStandardMaterial({ color: 0x88ccee, transparent: true, opacity: 0.6, roughness: 0.1 })
-  );
-  body.position.y = 0.12;
-  body.rotation.z = Math.PI / 2 - 0.3;
+  // Body — transparent cylinder
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.22, 8), bottleBodyMat);
+  body.position.y = 0.11;
+  body.rotation.z = Math.PI / 2 - 0.2;
   group.add(body);
+  // Neck — narrower
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.04, 0.06, 8), bottleBodyMat);
+  neck.position.set(0.12, 0.14, 0);
+  neck.rotation.z = Math.PI / 2 - 0.2;
+  group.add(neck);
   // Cap
-  const cap = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.03, 0.03, 0.05, 8),
-    new THREE.MeshStandardMaterial({ color: 0x2266ff, roughness: 0.5 })
-  );
-  cap.position.set(0.13, 0.17, 0);
-  cap.rotation.z = Math.PI / 2 - 0.3;
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.03, 8), bottleCapMat);
+  cap.position.set(0.15, 0.16, 0);
+  cap.rotation.z = Math.PI / 2 - 0.2;
   group.add(cap);
+  // Label band
+  const labelMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 });
+  const label = new THREE.Mesh(new THREE.CylinderGeometry(0.052, 0.052, 0.06, 8), labelMat);
+  label.position.set(0, 0.11, 0);
+  label.rotation.z = Math.PI / 2 - 0.2;
+  group.add(label);
   return group;
 }
 
