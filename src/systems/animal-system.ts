@@ -553,13 +553,8 @@ export class AnimalSystem {
       animal.mesh.position.y = h;
     }
 
-    // Face movement direction — models have head along +X, so offset by -PI/2
-    if (animal.def.id === 'crab') {
-      // Crabs walk sideways — face perpendicular to movement
-      animal.mesh.rotation.y = Math.atan2(dx, dz);
-    } else {
-      animal.mesh.rotation.y = Math.atan2(dx, dz) - Math.PI / 2;
-    }
+    // Face movement direction
+    animal.mesh.rotation.y = Math.atan2(dx, dz);
   }
 
   private respawnAnimal(animal: ActiveAnimal) {

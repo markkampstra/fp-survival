@@ -19,6 +19,9 @@ const snakeEyeMat = new THREE.MeshStandardMaterial({
 
 export function createWolfMesh(): THREE.Group {
   const group = new THREE.Group();
+  const model = new THREE.Group();
+  model.rotation.y = -Math.PI / 2;
+  group.add(model);
 
   // Body (sways during walk)
   const bodyGroup = new THREE.Group();
@@ -30,7 +33,7 @@ export function createWolfMesh(): THREE.Group {
   chest.position.set(0.35, -0.05, 0);
   bodyGroup.add(chest);
   bodyGroup.position.y = 0.55;
-  group.add(bodyGroup);
+  model.add(bodyGroup);
 
   // Head (tracks player, lunges on attack)
   const headGroup = new THREE.Group();
@@ -64,7 +67,7 @@ export function createWolfMesh(): THREE.Group {
     ear.position.set(-0.06, 0.23, s);
     headGroup.add(ear);
   }
-  group.add(headGroup);
+  model.add(headGroup);
 
   // Legs — each with upper + lower for walk cycle
   const legDefs: [string, number, number][] = [
@@ -90,7 +93,7 @@ export function createWolfMesh(): THREE.Group {
     paw.position.y = -0.2;
     lowerGroup.add(paw);
     legGroup.add(lowerGroup);
-    group.add(legGroup);
+    model.add(legGroup);
   }
 
   // Tail (wags, lowers when aggressive)
@@ -104,13 +107,16 @@ export function createWolfMesh(): THREE.Group {
   const tailTip = new THREE.Mesh(new THREE.SphereGeometry(0.035, 4, 4), wolfDarkMat);
   tailTip.position.set(-0.22, -0.25, 0);
   tailGroup.add(tailTip);
-  group.add(tailGroup);
+  model.add(tailGroup);
 
   return group;
 }
 
 export function createSnakeMesh(): THREE.Group {
   const group = new THREE.Group();
+  const model = new THREE.Group();
+  model.rotation.y = -Math.PI / 2;
+  group.add(model);
 
   // Snake body as chain of segment groups — each can be offset for slither
   const segmentCount = 10;
@@ -129,7 +135,7 @@ export function createSnakeMesh(): THREE.Group {
     seg.scale.set(1.4, 0.7, 1);
     if (i === 0) seg.castShadow = true;
     segGroup.add(seg);
-    group.add(segGroup);
+    model.add(segGroup);
   }
 
   // Head group (lunges on attack)
@@ -153,13 +159,13 @@ export function createSnakeMesh(): THREE.Group {
   tongue.position.set(-0.1, -0.01, 0);
   tongue.name = 'tongue';
   headGroup.add(tongue);
-  group.add(headGroup);
+  model.add(headGroup);
 
   // Tail tip
   const tailTip = new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.08, 4), snakeGreenMat);
   tailTip.position.set(0.74, 0.04, 0);
   tailTip.rotation.z = Math.PI / 2;
-  group.add(tailTip);
+  model.add(tailTip);
 
   return group;
 }

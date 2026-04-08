@@ -73,6 +73,10 @@ export function createCrabMesh(): THREE.Group {
 
 export function createFishMesh(): THREE.Group {
   const group = new THREE.Group();
+  // Inner model rotated so head (+X) faces +Z for correct movement direction
+  const model = new THREE.Group();
+  model.rotation.y = -Math.PI / 2;
+  group.add(model);
 
   // Body
   const bodyGroup = new THREE.Group();
@@ -102,7 +106,7 @@ export function createFishMesh(): THREE.Group {
     eye.position.set(0.35, 0.04, side * 0.12);
     bodyGroup.add(eye);
   }
-  group.add(bodyGroup);
+  model.add(bodyGroup);
 
   // Tail — separate group for swimming wag
   const tailGroup = new THREE.Group();
@@ -111,13 +115,17 @@ export function createFishMesh(): THREE.Group {
   const tail = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 0.28), fishFinMat);
   tail.rotation.y = Math.PI / 2;
   tailGroup.add(tail);
-  group.add(tailGroup);
+  model.add(tailGroup);
 
   return group;
 }
 
 export function createBoarMesh(): THREE.Group {
   const group = new THREE.Group();
+  // Inner model rotated so head (+X) faces +Z for correct movement direction
+  const model = new THREE.Group();
+  model.rotation.y = -Math.PI / 2;
+  group.add(model);
 
   // Body group (sways when moving)
   const bodyGroup = new THREE.Group();
@@ -130,7 +138,7 @@ export function createBoarMesh(): THREE.Group {
   belly.scale.set(1.8, 0.8, 1);
   belly.position.set(0, 0.35, 0);
   bodyGroup.add(belly);
-  group.add(bodyGroup);
+  model.add(bodyGroup);
 
   // Head group (bobs when walking, turns when fleeing)
   const headGroup = new THREE.Group();
@@ -159,7 +167,7 @@ export function createBoarMesh(): THREE.Group {
     ear.rotation.z = s > 0 ? 0.3 : -0.3;
     headGroup.add(ear);
   }
-  group.add(headGroup);
+  model.add(headGroup);
 
   // Legs — each in own group for walk cycle
   const legDefs: [string, number, number][] = [
@@ -176,7 +184,7 @@ export function createBoarMesh(): THREE.Group {
     const hoof = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.06, 6), boarDarkMat);
     hoof.position.y = -0.23;
     legGroup.add(hoof);
-    group.add(legGroup);
+    model.add(legGroup);
   }
 
   // Tail — separate for wagging
@@ -186,7 +194,7 @@ export function createBoarMesh(): THREE.Group {
   const tail = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.015, 4, 6, Math.PI), boarDarkMat);
   tail.rotation.y = Math.PI / 2;
   tailGroup.add(tail);
-  group.add(tailGroup);
+  model.add(tailGroup);
 
   return group;
 }
