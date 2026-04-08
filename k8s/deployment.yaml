@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: web
-          image: ghcr.io/markkampstra/fp-survival:e90442cf8becce9d96f40433bc12db7f6397cb62
+          image: ghcr.io/markkampstra/fp-survival:54aae9891c33c0076cb77b19e4d5120a1215fd0a
           ports:
             - containerPort: 80
           resources:
