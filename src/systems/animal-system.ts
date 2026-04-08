@@ -221,6 +221,7 @@ export class AnimalSystem {
       }
 
       animal.stateTimer -= dt;
+      animal.isMoving = false; // reset each frame — moveToward sets true if actually moving
 
       // AI behavior
       switch (animal.def.behavior) {
@@ -252,130 +253,157 @@ export class AnimalSystem {
     const state = animal.state;
 
     if (id === 'crab') {
-      // Scuttle: oscillate legs rapidly when moving
-      const legSpeed = moving ? 15 : 3;
-      const legAmp = moving ? 0.4 : 0.1;
+      // Legs: fast scuttle when moving, slow rhythmic sway when idle
+      const legSpeed = moving ? 18 : 4;
+      const legAmp = moving ? 0.5 : 0.2;
       for (let i = 0; i < 3; i++) {
         for (const side of ['l', 'r']) {
           const leg = mesh.getObjectByName(`leg_${i}_${side}`);
           if (leg) {
-            const phase = i * 1.2 + (side === 'r' ? Math.PI : 0);
+            const phase = i * 1.5 + (side === 'r' ? Math.PI : 0);
             leg.rotation.x = Math.sin(t * legSpeed + phase) * legAmp;
+            leg.rotation.z = (side === 'r' ? 0.6 : -0.6) + Math.sin(t * legSpeed * 0.5 + phase) * 0.1;
           }
         }
       }
-      // Claw pinch
+      // Claws: constant slow pinch
       const clawL = mesh.getObjectByName('claw_l');
       const clawR = mesh.getObjectByName('claw_r');
-      if (clawL) clawL.rotation.z = Math.sin(t * 2) * 0.15;
-      if (clawR) clawR.rotation.z = -Math.sin(t * 2) * 0.15;
-      // Body bob
+      if (clawL) clawL.rotation.z = Math.sin(t * 2.5) * 0.25;
+      if (clawR) clawR.rotation.z = -Math.sin(t * 2.5 + 0.5) * 0.25;
+      // Body: side-to-side rock
       const body = mesh.getObjectByName('body');
-      if (body) body.position.y = Math.sin(t * (moving ? 10 : 2)) * 0.01;
+      if (body) {
+        body.position.y = Math.sin(t * (moving ? 12 : 3)) * 0.015;
+        body.rotation.z = Math.sin(t * (moving ? 8 : 2)) * 0.05;
+      }
 
     } else if (id === 'fish') {
-      // Tail wag
+      // Tail: constant wag (fish always swim)
       const tail = mesh.getObjectByName('tail');
-      if (tail) tail.rotation.y = Math.sin(t * 6) * 0.4;
-      // Side fins
+      if (tail) tail.rotation.y = Math.sin(t * 7) * 0.5;
+      // Fins: flutter
       for (const side of ['l', 'r']) {
         const fin = mesh.getObjectByName(`fin_${side}`);
-        if (fin) fin.rotation.z = Math.sin(t * 4 + (side === 'r' ? Math.PI : 0)) * 0.2;
+        if (fin) fin.rotation.z = Math.sin(t * 5 + (side === 'r' ? Math.PI : 0)) * 0.3;
       }
-      // Body sway
+      // Body: gentle sway
       const body = mesh.getObjectByName('body');
-      if (body) body.rotation.y = Math.sin(t * 3) * 0.05;
+      if (body) body.rotation.z = Math.sin(t * 2) * 0.08;
 
     } else if (id === 'boar') {
-      // Walk cycle: oscillate legs
-      const walkSpeed = moving ? 8 : 0;
-      const walkAmp = moving ? 0.5 : 0;
-      for (const [name, phase] of [['leg_fl', 0], ['leg_fr', Math.PI], ['leg_bl', Math.PI], ['leg_br', 0]] as [string, number][]) {
+      // Walk cycle — visible even at idle (slow weight shift)
+      const walkSpeed = moving ? 9 : 2;
+      const walkAmp = moving ? 0.55 : 0.1;
+      const legPhases: [string, number][] = [['leg_fl', 0], ['leg_fr', Math.PI], ['leg_bl', Math.PI], ['leg_br', 0]];
+      for (const [name, phase] of legPhases) {
         const leg = mesh.getObjectByName(name);
         if (leg) leg.rotation.x = Math.sin(t * walkSpeed + phase) * walkAmp;
       }
-      // Head bob when walking
+      // Head: bobs when moving, slow look around when idle
       const head = mesh.getObjectByName('head');
       if (head) {
-        head.rotation.x = moving ? Math.sin(t * walkSpeed * 0.5) * 0.08 : Math.sin(t * 1.5) * 0.02;
+        head.rotation.x = Math.sin(t * (moving ? 4.5 : 1)) * (moving ? 0.12 : 0.04);
+        head.rotation.y = moving ? 0 : Math.sin(t * 0.7) * 0.15;
       }
-      // Tail wag
+      // Tail: constant gentle wag
       const tail = mesh.getObjectByName('tail');
-      if (tail) tail.rotation.y = Math.sin(t * 3) * 0.3;
-      // Body sway
+      if (tail) tail.rotation.y = Math.sin(t * 4) * 0.35;
+      // Body: sway and breathing
       const body = mesh.getObjectByName('body');
-      if (body) body.rotation.z = moving ? Math.sin(t * walkSpeed * 0.5) * 0.03 : 0;
+      if (body) {
+        body.rotation.z = Math.sin(t * (moving ? 4.5 : 1.5)) * (moving ? 0.05 : 0.02);
+        body.scale.y = 1 + Math.sin(t * 2) * 0.015; // breathing
+      }
 
     } else if (id === 'wolf') {
       const isAttacking = state === 'attack' || state === 'cooldown';
       const isChasing = state === 'chase';
-      const walkSpeed = isChasing ? 12 : (moving ? 8 : 0);
-      const walkAmp = isChasing ? 0.6 : (moving ? 0.45 : 0);
 
-      // Walk/run cycle
-      for (const [name, phase] of [['leg_fl', 0], ['leg_fr', Math.PI], ['leg_bl', Math.PI * 0.5], ['leg_br', Math.PI * 1.5]] as [string, number][]) {
+      // Walk/run/idle cycle — always some leg movement
+      const walkSpeed = isChasing ? 14 : (moving ? 9 : 2.5);
+      const walkAmp = isChasing ? 0.7 : (moving ? 0.5 : 0.12);
+      const legPhases: [string, number][] = [['leg_fl', 0], ['leg_fr', Math.PI], ['leg_bl', Math.PI * 0.5], ['leg_br', Math.PI * 1.5]];
+      for (const [name, phase] of legPhases) {
         const leg = mesh.getObjectByName(name);
         if (leg) leg.rotation.x = Math.sin(t * walkSpeed + phase) * walkAmp;
       }
-      // Head: lowers when chasing, lunges when attacking
+
+      // Head animation
       const head = mesh.getObjectByName('head');
       if (head) {
         if (isAttacking) {
-          head.rotation.x = Math.sin(t * 15) * 0.3; // rapid head shake
-          head.position.x = 0.85; // lunge forward
+          head.rotation.x = Math.sin(t * 16) * 0.35;
+          head.position.x = 0.88;
         } else if (isChasing) {
-          head.rotation.x = -0.1; // lowered predatory stance
-          head.position.x = 0.82;
+          head.rotation.x = -0.12;
+          head.position.x = 0.83;
         } else {
-          head.rotation.x = Math.sin(t * 1.5) * 0.03; // idle
+          // Idle: look around
+          head.rotation.x = Math.sin(t * 1.2) * 0.06;
+          head.rotation.y = Math.sin(t * 0.8) * 0.15;
           head.position.x = 0.78;
         }
       }
-      // Jaw opens on attack
+
+      // Jaw
       const jaw = mesh.getObjectByName('jaw');
       if (jaw) {
-        jaw.rotation.x = isAttacking ? 0.4 + Math.sin(t * 12) * 0.2 : 0;
+        jaw.rotation.x = isAttacking ? 0.5 + Math.sin(t * 14) * 0.25 : Math.sin(t * 1.5) * 0.02;
       }
-      // Tail: down when aggressive, wags when idle
+
+      // Tail
       const tail = mesh.getObjectByName('tail');
       if (tail) {
         if (isChasing || isAttacking) {
-          tail.rotation.x = 0.3; // tail down
-          tail.rotation.y = 0;
+          tail.rotation.x = 0.4;
+          tail.rotation.y = Math.sin(t * 6) * 0.1;
         } else {
-          tail.rotation.x = 0;
-          tail.rotation.y = Math.sin(t * 3) * 0.3;
+          tail.rotation.x = -0.1;
+          tail.rotation.y = Math.sin(t * 3) * 0.35;
         }
       }
-      // Body sway during run
+
+      // Body sway
       const body = mesh.getObjectByName('body');
-      if (body) body.rotation.z = walkSpeed > 0 ? Math.sin(t * walkSpeed * 0.5) * 0.04 : 0;
+      if (body) {
+        body.rotation.z = Math.sin(t * walkSpeed * 0.5) * (isChasing ? 0.06 : 0.02);
+        body.scale.y = 1 + Math.sin(t * 2.5) * 0.01; // breathing
+      }
 
     } else if (id === 'snake') {
-      // Slither: offset each segment's Z with a wave
+      // Slither wave — always active, faster when moving
+      const slitherSpeed = moving ? 5 : 2;
+      const slitherAmp = moving ? 0.15 : 0.08;
       for (let i = 0; i < 10; i++) {
         const seg = mesh.getObjectByName(`seg_${i}`);
         if (seg) {
-          const slitherSpeed = moving ? 4 : 1.5;
-          seg.position.z = Math.sin(t * slitherSpeed + i * 0.8) * 0.12;
+          seg.position.z = Math.sin(t * slitherSpeed + i * 0.7) * slitherAmp;
+          seg.position.y = 0.065 + Math.sin(t * slitherSpeed * 0.5 + i * 0.5) * 0.01;
         }
       }
+
       // Head
       const head = mesh.getObjectByName('head');
       if (head) {
         if (state === 'attack') {
-          head.position.x = -0.85; // lunge forward
-          head.position.y = 0.12; // rear up
+          head.position.x = -0.88;
+          head.position.y = 0.14;
+          head.rotation.x = -0.3; // rear up
         } else {
           head.position.x = -0.72;
           head.position.y = 0.07;
-          head.rotation.y = Math.sin(t * 2) * 0.1;
+          head.rotation.x = 0;
+          head.rotation.y = Math.sin(t * 1.8) * 0.15;
         }
       }
-      // Tongue flick
+
+      // Tongue: periodic flick
       const tongue = mesh.getObjectByName('tongue');
       if (tongue) {
-        tongue.scale.x = 0.5 + Math.abs(Math.sin(t * 5)) * 0.5;
+        const flickCycle = (t * 1.5) % 3; // flick every ~2 seconds
+        tongue.scale.x = flickCycle < 0.3 ? Math.sin(flickCycle / 0.3 * Math.PI) : 0;
+        tongue.visible = flickCycle < 0.3;
       }
     }
   }
