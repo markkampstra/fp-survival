@@ -21,6 +21,8 @@ interface ActiveAnimal {
   patrolAngle: number;
   attackTimer: number;
   isNightSpawn: boolean;
+  animTime: number;
+  isMoving: boolean;
 }
 
 const MESH_FACTORIES: Record<string, () => THREE.Group> = {
@@ -146,6 +148,8 @@ export class AnimalSystem {
       patrolAngle: Math.random() * Math.PI * 2,
       attackTimer: 0,
       isNightSpawn,
+      animTime: Math.random() * 10, // offset so animals don't animate in sync
+      isMoving: false,
     });
   }
 
@@ -232,6 +236,146 @@ export class AnimalSystem {
         case 'hostile':
           this.updateHostile(animal, dt, playerPos);
           break;
+      }
+
+      // Animate the mesh based on movement and state
+      animal.animTime += dt;
+      this.animateAnimal(animal, dt);
+    }
+  }
+
+  private animateAnimal(animal: ActiveAnimal, _dt: number) {
+    const mesh = animal.mesh;
+    const t = animal.animTime;
+    const moving = animal.isMoving;
+    const id = animal.def.id;
+    const state = animal.state;
+
+    if (id === 'crab') {
+      // Scuttle: oscillate legs rapidly when moving
+      const legSpeed = moving ? 15 : 3;
+      const legAmp = moving ? 0.4 : 0.1;
+      for (let i = 0; i < 3; i++) {
+        for (const side of ['l', 'r']) {
+          const leg = mesh.getObjectByName(`leg_${i}_${side}`);
+          if (leg) {
+            const phase = i * 1.2 + (side === 'r' ? Math.PI : 0);
+            leg.rotation.x = Math.sin(t * legSpeed + phase) * legAmp;
+          }
+        }
+      }
+      // Claw pinch
+      const clawL = mesh.getObjectByName('claw_l');
+      const clawR = mesh.getObjectByName('claw_r');
+      if (clawL) clawL.rotation.z = Math.sin(t * 2) * 0.15;
+      if (clawR) clawR.rotation.z = -Math.sin(t * 2) * 0.15;
+      // Body bob
+      const body = mesh.getObjectByName('body');
+      if (body) body.position.y = Math.sin(t * (moving ? 10 : 2)) * 0.01;
+
+    } else if (id === 'fish') {
+      // Tail wag
+      const tail = mesh.getObjectByName('tail');
+      if (tail) tail.rotation.y = Math.sin(t * 6) * 0.4;
+      // Side fins
+      for (const side of ['l', 'r']) {
+        const fin = mesh.getObjectByName(`fin_${side}`);
+        if (fin) fin.rotation.z = Math.sin(t * 4 + (side === 'r' ? Math.PI : 0)) * 0.2;
+      }
+      // Body sway
+      const body = mesh.getObjectByName('body');
+      if (body) body.rotation.y = Math.sin(t * 3) * 0.05;
+
+    } else if (id === 'boar') {
+      // Walk cycle: oscillate legs
+      const walkSpeed = moving ? 8 : 0;
+      const walkAmp = moving ? 0.5 : 0;
+      for (const [name, phase] of [['leg_fl', 0], ['leg_fr', Math.PI], ['leg_bl', Math.PI], ['leg_br', 0]] as [string, number][]) {
+        const leg = mesh.getObjectByName(name);
+        if (leg) leg.rotation.x = Math.sin(t * walkSpeed + phase) * walkAmp;
+      }
+      // Head bob when walking
+      const head = mesh.getObjectByName('head');
+      if (head) {
+        head.rotation.x = moving ? Math.sin(t * walkSpeed * 0.5) * 0.08 : Math.sin(t * 1.5) * 0.02;
+      }
+      // Tail wag
+      const tail = mesh.getObjectByName('tail');
+      if (tail) tail.rotation.y = Math.sin(t * 3) * 0.3;
+      // Body sway
+      const body = mesh.getObjectByName('body');
+      if (body) body.rotation.z = moving ? Math.sin(t * walkSpeed * 0.5) * 0.03 : 0;
+
+    } else if (id === 'wolf') {
+      const isAttacking = state === 'attack' || state === 'cooldown';
+      const isChasing = state === 'chase';
+      const walkSpeed = isChasing ? 12 : (moving ? 8 : 0);
+      const walkAmp = isChasing ? 0.6 : (moving ? 0.45 : 0);
+
+      // Walk/run cycle
+      for (const [name, phase] of [['leg_fl', 0], ['leg_fr', Math.PI], ['leg_bl', Math.PI * 0.5], ['leg_br', Math.PI * 1.5]] as [string, number][]) {
+        const leg = mesh.getObjectByName(name);
+        if (leg) leg.rotation.x = Math.sin(t * walkSpeed + phase) * walkAmp;
+      }
+      // Head: lowers when chasing, lunges when attacking
+      const head = mesh.getObjectByName('head');
+      if (head) {
+        if (isAttacking) {
+          head.rotation.x = Math.sin(t * 15) * 0.3; // rapid head shake
+          head.position.x = 0.85; // lunge forward
+        } else if (isChasing) {
+          head.rotation.x = -0.1; // lowered predatory stance
+          head.position.x = 0.82;
+        } else {
+          head.rotation.x = Math.sin(t * 1.5) * 0.03; // idle
+          head.position.x = 0.78;
+        }
+      }
+      // Jaw opens on attack
+      const jaw = mesh.getObjectByName('jaw');
+      if (jaw) {
+        jaw.rotation.x = isAttacking ? 0.4 + Math.sin(t * 12) * 0.2 : 0;
+      }
+      // Tail: down when aggressive, wags when idle
+      const tail = mesh.getObjectByName('tail');
+      if (tail) {
+        if (isChasing || isAttacking) {
+          tail.rotation.x = 0.3; // tail down
+          tail.rotation.y = 0;
+        } else {
+          tail.rotation.x = 0;
+          tail.rotation.y = Math.sin(t * 3) * 0.3;
+        }
+      }
+      // Body sway during run
+      const body = mesh.getObjectByName('body');
+      if (body) body.rotation.z = walkSpeed > 0 ? Math.sin(t * walkSpeed * 0.5) * 0.04 : 0;
+
+    } else if (id === 'snake') {
+      // Slither: offset each segment's Z with a wave
+      for (let i = 0; i < 10; i++) {
+        const seg = mesh.getObjectByName(`seg_${i}`);
+        if (seg) {
+          const slitherSpeed = moving ? 4 : 1.5;
+          seg.position.z = Math.sin(t * slitherSpeed + i * 0.8) * 0.12;
+        }
+      }
+      // Head
+      const head = mesh.getObjectByName('head');
+      if (head) {
+        if (state === 'attack') {
+          head.position.x = -0.85; // lunge forward
+          head.position.y = 0.12; // rear up
+        } else {
+          head.position.x = -0.72;
+          head.position.y = 0.07;
+          head.rotation.y = Math.sin(t * 2) * 0.1;
+        }
+      }
+      // Tongue flick
+      const tongue = mesh.getObjectByName('tongue');
+      if (tongue) {
+        tongue.scale.x = 0.5 + Math.abs(Math.sin(t * 5)) * 0.5;
       }
     }
   }
@@ -364,8 +508,12 @@ export class AnimalSystem {
     const dx = target.x - animal.mesh.position.x;
     const dz = target.z - animal.mesh.position.z;
     const dist = Math.sqrt(dx * dx + dz * dz);
-    if (dist < 0.1) return;
+    if (dist < 0.1) {
+      animal.isMoving = false;
+      return;
+    }
 
+    animal.isMoving = true;
     const moveX = (dx / dist) * speed * dt;
     const moveZ = (dz / dist) * speed * dt;
     animal.mesh.position.x += moveX;
