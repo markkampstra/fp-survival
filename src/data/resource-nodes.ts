@@ -23,18 +23,37 @@ const fiberDarkMat = new THREE.MeshStandardMaterial({ color: 0x2a5d1a, roughness
 const bottleBodyMat = new THREE.MeshStandardMaterial({ color: 0x88ccee, transparent: true, opacity: 0.55, roughness: 0.1, metalness: 0.1 });
 const bottleCapMat = new THREE.MeshStandardMaterial({ color: 0x2266ff, roughness: 0.5 });
 
+/** Create a faceted rock by displacing icosahedron vertices */
+function createFacetedRock(radius: number, mat: THREE.Material): THREE.Mesh {
+  const geo = new THREE.IcosahedronGeometry(radius, 0); // 0 detail = 20 faces, sharp angular
+  // Randomly displace vertices for irregular shape
+  const pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const y = pos.getY(i);
+    const z = pos.getZ(i);
+    const len = Math.sqrt(x * x + y * y + z * z);
+    const displacement = 0.75 + Math.random() * 0.5; // 75-125% of original radius
+    pos.setXYZ(i, x / len * radius * displacement, y / len * radius * displacement * 0.7, z / len * radius * displacement);
+  }
+  geo.computeVertexNormals();
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, 0);
+  return mesh;
+}
+
 function makeStone(): THREE.Object3D {
   const group = new THREE.Group();
-  // Main rock — irregular by combining 2 scaled spheres
-  const main = new THREE.Mesh(new THREE.SphereGeometry(0.3, 5, 4), stoneMat);
-  main.scale.set(1, 0.55, 0.85);
+  // Main faceted rock
+  const main = createFacetedRock(0.25, stoneMat);
+  main.scale.y = 0.6;
   main.castShadow = true;
   group.add(main);
-  // Secondary bump for irregular shape
-  const bump = new THREE.Mesh(new THREE.SphereGeometry(0.15, 4, 3), stoneDarkMat);
-  bump.position.set(0.08, 0.05, 0.06);
-  bump.scale.set(1, 0.6, 0.8);
-  group.add(bump);
+  // Small chip beside it
+  const chip = createFacetedRock(0.1, stoneDarkMat);
+  chip.position.set(0.18, -0.02, 0.08);
+  chip.scale.y = 0.5;
+  group.add(chip);
   return group;
 }
 
@@ -81,21 +100,34 @@ function makeFiberPlant(): THREE.Object3D {
 
 function makeRockDeposit(): THREE.Object3D {
   const group = new THREE.Group();
-  // Cluster of 4-5 rocks, varying sizes
-  const rockCount = 4 + Math.floor(Math.random() * 2);
-  for (let i = 0; i < rockCount; i++) {
-    const mat = i % 2 === 0 ? stoneMat : stoneDarkMat;
-    const size = 0.25 + Math.random() * 0.35;
-    const rock = new THREE.Mesh(new THREE.SphereGeometry(size, 5, 4), mat);
-    rock.scale.set(1, 0.6 + Math.random() * 0.2, 0.8 + Math.random() * 0.2);
-    rock.position.set(
-      (Math.random() - 0.5) * 0.7,
-      size * 0.3,
-      (Math.random() - 0.5) * 0.7
-    );
-    rock.rotation.y = Math.random() * Math.PI;
-    if (i < 2) rock.castShadow = true; // only largest rocks cast shadows
+  // Central large rock
+  const main = createFacetedRock(0.5, stoneMat);
+  main.scale.y = 0.65;
+  main.position.y = 0.15;
+  main.castShadow = true;
+  group.add(main);
+  // Surrounding smaller rocks
+  const count = 3 + Math.floor(Math.random() * 3);
+  for (let i = 0; i < count; i++) {
+    const angle = (i / count) * Math.PI * 2 + Math.random() * 0.5;
+    const dist = 0.4 + Math.random() * 0.3;
+    const size = 0.15 + Math.random() * 0.2;
+    const mat = i % 2 === 0 ? stoneDarkMat : stoneMat;
+    const rock = createFacetedRock(size, mat);
+    rock.scale.y = 0.5 + Math.random() * 0.3;
+    rock.position.set(Math.cos(angle) * dist, size * 0.25, Math.sin(angle) * dist);
+    if (i < 2) rock.castShadow = true;
     group.add(rock);
+  }
+  // Rubble/debris — tiny chips
+  for (let i = 0; i < 4; i++) {
+    const chip = createFacetedRock(0.06, stoneDarkMat);
+    chip.position.set(
+      (Math.random() - 0.5) * 0.9,
+      0.02,
+      (Math.random() - 0.5) * 0.9
+    );
+    group.add(chip);
   }
   return group;
 }

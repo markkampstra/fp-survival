@@ -1,55 +1,125 @@
 import * as THREE from 'three';
 import type { Terrain } from './terrain';
 
+/**
+ * Tier 3 Vegetation: More organic palm trees with curved trunks,
+ * fuller canopies, and natural variation.
+ */
+
 // Shared materials
 const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8b6914, roughness: 0.9 });
 const trunkDarkMat = new THREE.MeshStandardMaterial({ color: 0x6b5010, roughness: 0.95 });
 const frondMat = new THREE.MeshStandardMaterial({ color: 0x2d5a1e, roughness: 0.7, side: THREE.DoubleSide });
 const frondLightMat = new THREE.MeshStandardMaterial({ color: 0x3a7520, roughness: 0.7, side: THREE.DoubleSide });
+const frondYoungMat = new THREE.MeshStandardMaterial({ color: 0x4a9530, roughness: 0.65, side: THREE.DoubleSide });
+const coconutMat = new THREE.MeshStandardMaterial({ color: 0x5C3D1E, roughness: 0.8 });
+
+function createCurvedTrunk(height: number, curve: number, segments: number): THREE.Group {
+  const group = new THREE.Group();
+  const segHeight = height / segments;
+
+  for (let i = 0; i < segments; i++) {
+    const t = i / segments;
+    const nextT = (i + 1) / segments;
+    const bottomRadius = 0.28 * (1 - t * 0.55); // taper from 0.28 to ~0.13
+    const topRadius = 0.28 * (1 - nextT * 0.55);
+    const mat = i % 3 === 0 ? trunkDarkMat : trunkMat;
+
+    const seg = new THREE.Mesh(
+      new THREE.CylinderGeometry(topRadius, bottomRadius, segHeight, 7),
+      mat
+    );
+
+    // Curve the trunk slightly — each segment offset from previous
+    const curveOffset = Math.sin(t * Math.PI) * curve;
+    seg.position.set(curveOffset, t * height + segHeight / 2, 0);
+
+    // Slight tilt to follow curve
+    if (i > 0) {
+      seg.rotation.z = Math.cos(t * Math.PI) * curve * 0.15;
+    }
+
+    if (i < 3) seg.castShadow = true;
+    group.add(seg);
+  }
+
+  return group;
+}
+
+function createFrond(length: number, width: number, droop: number): THREE.Mesh {
+  const geo = new THREE.PlaneGeometry(width, length, 1, 5);
+  const positions = geo.attributes.position;
+
+  for (let i = 0; i < positions.count; i++) {
+    const y = positions.getY(i);
+    const x = positions.getX(i);
+    const t = (y + length / 2) / length; // 0 at base, 1 at tip
+
+    // Taper width toward tip
+    positions.setX(i, x * Math.max(0.05, 1 - t * 0.85));
+
+    // Droop curve — tip hangs down
+    positions.setZ(i, -t * t * droop);
+
+    // Slight wavy edge
+    positions.setX(i, positions.getX(i) + Math.sin(t * 6) * 0.03);
+  }
+
+  geo.computeVertexNormals();
+  return new THREE.Mesh(geo, frondMat);
+}
 
 function createPalmTree(): THREE.Group {
   const tree = new THREE.Group();
 
-  // Trunk — tapered cylinder with bark rings
-  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.28, 8, 8), trunkMat);
-  trunk.position.y = 4;
-  trunk.castShadow = true;
+  // Curved trunk (6-8 segments)
+  const trunkHeight = 7 + Math.random() * 2;
+  const trunkCurve = 0.3 + Math.random() * 0.5;
+  const trunk = createCurvedTrunk(trunkHeight, trunkCurve, 7);
   tree.add(trunk);
 
-  // Bark rings — darker bands for texture
-  for (let i = 0; i < 4; i++) {
-    const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.16 + i * 0.015, 0.18 + i * 0.015, 0.08, 8), trunkDarkMat);
-    ring.position.y = 1.5 + i * 1.6;
-    tree.add(ring);
-  }
+  // Crown position (top of curved trunk)
+  const crownX = Math.sin(Math.PI) * trunkCurve * 0.3; // slight offset from curve
+  const crownY = trunkHeight;
 
-  // Coconut cluster at top
-  const coconutMat = new THREE.MeshStandardMaterial({ color: 0x5C3D1E, roughness: 0.8 });
-  for (let i = 0; i < 3; i++) {
-    const angle = (i / 3) * Math.PI * 2;
-    const coconut = new THREE.Mesh(new THREE.SphereGeometry(0.1, 5, 4), coconutMat);
-    coconut.position.set(Math.cos(angle) * 0.15, 7.7, Math.sin(angle) * 0.15);
+  // Coconut cluster
+  for (let i = 0; i < 3 + Math.floor(Math.random() * 2); i++) {
+    const angle = (i / 4) * Math.PI * 2 + Math.random() * 0.5;
+    const coconut = new THREE.Mesh(
+      new THREE.SphereGeometry(0.09 + Math.random() * 0.03, 5, 4),
+      coconutMat
+    );
+    coconut.position.set(
+      crownX + Math.cos(angle) * 0.18,
+      crownY - 0.15 - Math.random() * 0.1,
+      Math.sin(angle) * 0.18
+    );
+    coconut.scale.y = 1.15; // slightly elongated
     tree.add(coconut);
   }
 
-  // Fronds — alternating light/dark for depth
-  const frondCount = 7;
+  // Fronds — layered: large droopy outer + shorter upright inner
+  const frondCount = 7 + Math.floor(Math.random() * 3);
   for (let i = 0; i < frondCount; i++) {
-    const angle = (i / frondCount) * Math.PI * 2;
-    const frondGeometry = new THREE.PlaneGeometry(1.3, 4.2);
-    const mat = i % 2 === 0 ? frondMat : frondLightMat;
+    const angle = (i / frondCount) * Math.PI * 2 + Math.random() * 0.2;
+    const isInner = i % 3 === 0;
+    const length = isInner ? 2.5 + Math.random() * 0.5 : 3.8 + Math.random() * 0.8;
+    const width = isInner ? 0.8 : 1.2 + Math.random() * 0.3;
+    const droop = isInner ? 0.3 : 1.0 + Math.random() * 0.5;
 
-    // Taper the frond
-    const positions = frondGeometry.attributes.position;
-    for (let j = 0; j < positions.count; j++) {
-      const y = positions.getY(j);
-      const taper = 1 - (y + 2.1) / 4.2;
-      positions.setX(j, positions.getX(j) * Math.max(0.08, taper));
-    }
+    const frond = createFrond(length, width, droop);
+    frond.material = isInner ? frondYoungMat : (i % 2 === 0 ? frondMat : frondLightMat);
 
-    const frond = new THREE.Mesh(frondGeometry, mat);
-    frond.position.set(Math.cos(angle) * 0.5, 8, Math.sin(angle) * 0.5);
-    frond.rotation.set(-Math.PI / 4 - Math.random() * 0.15, angle, 0);
+    frond.position.set(
+      crownX + Math.cos(angle) * 0.3,
+      crownY + (isInner ? 0.2 : -0.05),
+      Math.sin(angle) * 0.3
+    );
+    frond.rotation.set(
+      -Math.PI / (isInner ? 3 : 4.5) - Math.random() * 0.15,
+      angle,
+      0
+    );
     frond.castShadow = true;
     tree.add(frond);
   }
