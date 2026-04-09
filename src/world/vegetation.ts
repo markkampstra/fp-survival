@@ -9,9 +9,26 @@ import type { Terrain } from './terrain';
 // Shared materials
 const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8b6914, roughness: 0.9 });
 const trunkDarkMat = new THREE.MeshStandardMaterial({ color: 0x6b5010, roughness: 0.95 });
-const frondMat = new THREE.MeshStandardMaterial({ color: 0x2d5a1e, roughness: 0.7, side: THREE.DoubleSide });
-const frondLightMat = new THREE.MeshStandardMaterial({ color: 0x3a7520, roughness: 0.7, side: THREE.DoubleSide });
-const frondYoungMat = new THREE.MeshStandardMaterial({ color: 0x4a9530, roughness: 0.65, side: THREE.DoubleSide });
+// SSS (subsurface scattering) shader patch — makes leaves glow when backlit by sun
+function addLeafSSS(mat: THREE.MeshStandardMaterial) {
+  mat.onBeforeCompile = (shader) => {
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <lights_physical_fragment>',
+      `
+      #include <lights_physical_fragment>
+      // Cheap SSS: backlit glow when looking toward the sun through leaves
+      vec3 sssDir = normalize(geometry.position - vec3(0.0));
+      float sss = pow(max(0.0, dot(geometry.viewDir, -directLight.direction)), 3.0) * 0.4;
+      reflectedLight.directDiffuse += diffuseColor.rgb * sss * directLight.color;
+      `
+    );
+  };
+  return mat;
+}
+
+const frondMat = addLeafSSS(new THREE.MeshStandardMaterial({ color: 0x2d5a1e, roughness: 0.7, side: THREE.DoubleSide }));
+const frondLightMat = addLeafSSS(new THREE.MeshStandardMaterial({ color: 0x3a7520, roughness: 0.7, side: THREE.DoubleSide }));
+const frondYoungMat = addLeafSSS(new THREE.MeshStandardMaterial({ color: 0x4a9530, roughness: 0.65, side: THREE.DoubleSide }));
 const coconutMat = new THREE.MeshStandardMaterial({ color: 0x5C3D1E, roughness: 0.8 });
 
 function createCurvedTrunk(height: number, curve: number): THREE.Group {

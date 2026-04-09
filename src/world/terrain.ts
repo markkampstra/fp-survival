@@ -37,9 +37,17 @@ export class Terrain {
       positions.setY(i, height);
       this.heightData[i] = height;
 
-      // Biome-based vertex colors
+      // Biome-based vertex colors with baked ambient occlusion
       const biomeColor = getBiomeColor(height, noise);
-      colors.push(biomeColor.r, biomeColor.g, biomeColor.b);
+
+      // AO: lower areas (valleys, sea level) are darker
+      // Also darken based on how much lower this vertex is vs surroundings
+      const ao = Math.min(1, 0.55 + height * 0.03); // 0.55 at sea level → 1.0 at height 15+
+      // Shore AO: extra darkening near water line
+      const shoreAO = height < 1.5 ? 0.75 + (height / 1.5) * 0.25 : 1.0;
+      const totalAO = ao * shoreAO;
+
+      colors.push(biomeColor.r * totalAO, biomeColor.g * totalAO, biomeColor.b * totalAO);
     }
 
     this.geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
@@ -52,13 +60,75 @@ export class Terrain {
       flatShading: false,
     });
 
-    // Height fog: denser fog at low altitudes for ground-hugging mist
+    // Shader patches: height fog + procedural texture detail + slope-based roughness
     material.onBeforeCompile = (shader) => {
+      // Pass world position to fragment shader for procedural detail
+      shader.vertexShader = shader.vertexShader.replace(
+        '#include <common>',
+        `
+        #include <common>
+        varying vec3 vWorldPosition;
+        varying vec3 vWorldNormal;
+        `
+      );
       shader.vertexShader = shader.vertexShader.replace(
         '#include <fog_vertex>',
         `
         #include <fog_vertex>
-        vFogDepth = vFogDepth * (1.0 + max(0.0, 8.0 - (modelMatrix * vec4(position, 1.0)).y) * 0.15);
+        vWorldPosition = (modelMatrix * vec4(position, 1.0)).xyz;
+        vWorldNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
+        vFogDepth = vFogDepth * (1.0 + max(0.0, 8.0 - vWorldPosition.y) * 0.15);
+        `
+      );
+
+      // Fragment: procedural detail noise + slope-based roughness
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <common>',
+        `
+        #include <common>
+        varying vec3 vWorldPosition;
+        varying vec3 vWorldNormal;
+
+        float hash2D(vec2 p) {
+          return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+        }
+        float detailNoise(vec2 p) {
+          vec2 i = floor(p);
+          vec2 f = fract(p);
+          f = f * f * (3.0 - 2.0 * f);
+          float a = hash2D(i);
+          float b = hash2D(i + vec2(1.0, 0.0));
+          float c = hash2D(i + vec2(0.0, 1.0));
+          float d = hash2D(i + vec2(1.0, 1.0));
+          return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+        }
+        `
+      );
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <color_fragment>',
+        `
+        #include <color_fragment>
+
+        // Procedural detail: subtle noise variation to break up flat vertex colors
+        float detail = detailNoise(vWorldPosition.xz * 2.0) * 0.12 - 0.06;
+        diffuseColor.rgb += detail;
+
+        // Fine grain texture at close range
+        float grain = detailNoise(vWorldPosition.xz * 15.0) * 0.04 - 0.02;
+        diffuseColor.rgb += grain;
+
+        // Slope-based darkening: steep slopes = more rock-like (darker)
+        float slope = 1.0 - vWorldNormal.y;
+        diffuseColor.rgb *= 1.0 - slope * 0.25;
+        `
+      );
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <roughnessmap_fragment>',
+        `
+        #include <roughnessmap_fragment>
+        // Slope-based roughness: flat = smooth (grass), steep = rough (rock)
+        float slopeR = 1.0 - vWorldNormal.y;
+        roughnessFactor = mix(roughnessFactor, 0.95, slopeR);
         `
       );
     };

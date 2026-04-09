@@ -574,7 +574,7 @@ export class Game {
     const pos = this.camera.position;
     this.hud.update(pos.x, pos.y, pos.z, this.dayCycle.getTimeString());
 
-    this.postProcessing.render();
+    this.postProcessing.render(dt);
 
     // Screen-space rain overlay (composited on top)
     if (this.rain.screenQuad.visible) {
