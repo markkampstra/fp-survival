@@ -14,40 +14,38 @@ const frondLightMat = new THREE.MeshStandardMaterial({ color: 0x3a7520, roughnes
 const frondYoungMat = new THREE.MeshStandardMaterial({ color: 0x4a9530, roughness: 0.65, side: THREE.DoubleSide });
 const coconutMat = new THREE.MeshStandardMaterial({ color: 0x5C3D1E, roughness: 0.8 });
 
-function createCurvedTrunk(height: number, curve: number, segments: number): THREE.Group {
+function createCurvedTrunk(height: number, curve: number): THREE.Group {
   const group = new THREE.Group();
-  const segHeight = height / segments;
 
-  for (let i = 0; i < segments; i++) {
-    const t = i / segments;
-    const nextT = (i + 1) / segments;
-    const bottomRadius = 0.28 * (1 - t * 0.55); // taper from 0.28 to ~0.13
-    const topRadius = 0.28 * (1 - nextT * 0.55);
-    const mat = i % 3 === 0 ? trunkDarkMat : trunkMat;
+  // Single tapered cylinder for the main trunk — no gaps
+  const trunk = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.12, 0.28, height, 8),
+    trunkMat
+  );
+  trunk.position.y = height / 2;
+  trunk.castShadow = true;
+  // Slight lean
+  trunk.rotation.z = curve * 0.08;
+  group.add(trunk);
 
-    const seg = new THREE.Mesh(
-      new THREE.CylinderGeometry(topRadius, bottomRadius, segHeight, 7),
-      mat
+  // Bark ring details — thin darker cylinders wrapped around trunk
+  for (let i = 0; i < 5; i++) {
+    const t = 0.15 + (i / 5) * 0.7;
+    const y = t * height;
+    const r = 0.28 * (1 - t * 0.55) + 0.015;
+    const ring = new THREE.Mesh(
+      new THREE.CylinderGeometry(r, r + 0.005, 0.06, 8),
+      trunkDarkMat
     );
-
-    // Curve the trunk slightly — each segment offset from previous
-    const curveOffset = Math.sin(t * Math.PI) * curve;
-    seg.position.set(curveOffset, t * height + segHeight / 2, 0);
-
-    // Slight tilt to follow curve
-    if (i > 0) {
-      seg.rotation.z = Math.cos(t * Math.PI) * curve * 0.15;
-    }
-
-    if (i < 3) seg.castShadow = true;
-    group.add(seg);
+    ring.position.set(Math.sin(t * Math.PI) * curve * 0.05, y, 0);
+    group.add(ring);
   }
 
   return group;
 }
 
 function createFrond(length: number, width: number, droop: number): THREE.Mesh {
-  const geo = new THREE.PlaneGeometry(width, length, 1, 5);
+  const geo = new THREE.PlaneGeometry(width, length, 2, 8);
   const positions = geo.attributes.position;
 
   for (let i = 0; i < positions.count; i++) {
@@ -55,14 +53,11 @@ function createFrond(length: number, width: number, droop: number): THREE.Mesh {
     const x = positions.getX(i);
     const t = (y + length / 2) / length; // 0 at base, 1 at tip
 
-    // Taper width toward tip
-    positions.setX(i, x * Math.max(0.05, 1 - t * 0.85));
+    // Taper width toward tip — gradual
+    positions.setX(i, x * Math.max(0.08, 1 - t * 0.75));
 
-    // Droop curve — tip hangs down
-    positions.setZ(i, -t * t * droop);
-
-    // Slight wavy edge
-    positions.setX(i, positions.getX(i) + Math.sin(t * 6) * 0.03);
+    // Gentle droop — quadratic curve, mild
+    positions.setZ(i, -t * t * droop * 0.3);
   }
 
   geo.computeVertexNormals();
@@ -72,14 +67,14 @@ function createFrond(length: number, width: number, droop: number): THREE.Mesh {
 function createPalmTree(): THREE.Group {
   const tree = new THREE.Group();
 
-  // Curved trunk (6-8 segments)
+  // Trunk with slight lean
   const trunkHeight = 7 + Math.random() * 2;
-  const trunkCurve = 0.3 + Math.random() * 0.5;
-  const trunk = createCurvedTrunk(trunkHeight, trunkCurve, 7);
+  const trunkCurve = 0.3 + Math.random() * 0.4;
+  const trunk = createCurvedTrunk(trunkHeight, trunkCurve);
   tree.add(trunk);
 
-  // Crown position (top of curved trunk)
-  const crownX = Math.sin(Math.PI) * trunkCurve * 0.3; // slight offset from curve
+  // Crown position
+  const crownX = trunkCurve * 0.06; // slight offset matching lean
   const crownY = trunkHeight;
 
   // Coconut cluster
@@ -103,9 +98,9 @@ function createPalmTree(): THREE.Group {
   for (let i = 0; i < frondCount; i++) {
     const angle = (i / frondCount) * Math.PI * 2 + Math.random() * 0.2;
     const isInner = i % 3 === 0;
-    const length = isInner ? 2.5 + Math.random() * 0.5 : 3.8 + Math.random() * 0.8;
-    const width = isInner ? 0.8 : 1.2 + Math.random() * 0.3;
-    const droop = isInner ? 0.3 : 1.0 + Math.random() * 0.5;
+    const length = isInner ? 2.5 + Math.random() * 0.5 : 3.5 + Math.random() * 0.5;
+    const width = isInner ? 0.9 : 1.2 + Math.random() * 0.2;
+    const droop = isInner ? 0.5 : 1.5 + Math.random() * 0.5;
 
     const frond = createFrond(length, width, droop);
     frond.material = isInner ? frondYoungMat : (i % 2 === 0 ? frondMat : frondLightMat);
