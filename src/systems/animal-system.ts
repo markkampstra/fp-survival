@@ -3,6 +3,7 @@ import { events } from '../core/event-bus';
 import { ANIMALS, type AnimalDef } from '../data/animals';
 import { createCrabMesh, createFishMesh, createBoarMesh } from '../world/animals';
 import { createWolfMesh, createSnakeMesh } from '../world/hostile-animals';
+import { AnimalAnimator, type AnimState } from './animal-animator';
 import type { Terrain } from '../world/terrain';
 import type { Inventory } from './inventory';
 import type { PlaceableManager } from '../world/placeables';
@@ -38,6 +39,7 @@ export class AnimalSystem {
   private group: THREE.Group;
   private tmpVec = new THREE.Vector3();
   private nightSpawned = false;
+  private animator = new AnimalAnimator();
 
   constructor(
     private terrain: Terrain,
@@ -109,6 +111,7 @@ export class AnimalSystem {
   private despawnNightCreatures() {
     const toRemove = this.animals.filter(a => a.isNightSpawn);
     for (const animal of toRemove) {
+      this.animator.unregister(animal.mesh);
       this.group.remove(animal.mesh);
     }
     this.animals = this.animals.filter(a => !a.isNightSpawn);
@@ -148,9 +151,12 @@ export class AnimalSystem {
       patrolAngle: Math.random() * Math.PI * 2,
       attackTimer: 0,
       isNightSpawn,
-      animTime: Math.random() * 10, // offset so animals don't animate in sync
+      animTime: Math.random() * 10,
       isMoving: false,
     });
+
+    // Register with Tier 3 animator
+    this.animator.register(mesh, def.id);
   }
 
   private handleAttack(pos: THREE.Vector3, dir: THREE.Vector3, toolType: string | null) {
@@ -239,18 +245,31 @@ export class AnimalSystem {
           break;
       }
 
-      // Animate the mesh based on movement and state
+      // Tier 3 animation: determine state and crossfade
       animal.animTime += dt;
-      this.animateAnimal(animal, dt);
+      let animState: AnimState = 'idle';
+      if (animal.state === 'attack') {
+        animState = 'attack';
+      } else if (animal.state === 'chase' || (animal.state === 'flee' && animal.isMoving)) {
+        animState = 'run';
+      } else if (animal.isMoving) {
+        animState = 'walk';
+      }
+      this.animator.setState(animal.mesh, animState);
     }
+
+    // Update all AnimationMixers (Tier 3 keyframe playback)
+    this.animator.update(dt);
   }
 
-  private animateAnimal(animal: ActiveAnimal, _dt: number) {
-    const mesh = animal.mesh;
-    const t = animal.animTime;
-    const moving = animal.isMoving;
-    const id = animal.def.id;
-    const state = animal.state;
+  // Old Tier 2 animateAnimal removed — replaced by AnimalAnimator (Tier 3)
+
+  private _unusedAnimateAnimal(_animal: ActiveAnimal, _dt: number) { // kept for reference
+    const mesh = _animal.mesh;
+    const t = _animal.animTime;
+    const moving = _animal.isMoving;
+    const id = _animal.def.id;
+    const state = _animal.state;
 
     if (id === 'crab') {
       // Legs: fast scuttle when moving, slow rhythmic sway when idle
