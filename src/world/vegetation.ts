@@ -9,18 +9,36 @@ import type { Terrain } from './terrain';
 // Shared materials
 const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8b6914, roughness: 0.9 });
 const trunkDarkMat = new THREE.MeshStandardMaterial({ color: 0x6b5010, roughness: 0.95 });
-// SSS (subsurface scattering) shader patch — makes leaves glow when backlit by sun
+// SSS for vegetation — adds backlit glow via output_fragment (safe insertion point)
 function addLeafSSS(mat: THREE.MeshStandardMaterial) {
   mat.onBeforeCompile = (shader) => {
+    // Add varying for view direction in world space
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <common>',
+      `#include <common>
+      varying vec3 vViewDir;`
+    );
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <fog_vertex>',
+      `#include <fog_vertex>
+      vViewDir = normalize(cameraPosition - (modelMatrix * vec4(position, 1.0)).xyz);`
+    );
     shader.fragmentShader = shader.fragmentShader.replace(
-      '#include <lights_physical_fragment>',
-      `
-      #include <lights_physical_fragment>
-      // Cheap SSS: backlit glow when looking toward the sun through leaves
-      vec3 sssDir = normalize(geometry.position - vec3(0.0));
-      float sss = pow(max(0.0, dot(geometry.viewDir, -directLight.direction)), 3.0) * 0.4;
-      reflectedLight.directDiffuse += diffuseColor.rgb * sss * directLight.color;
-      `
+      '#include <common>',
+      `#include <common>
+      varying vec3 vViewDir;`
+    );
+    // Add SSS glow after all lighting, before tone mapping
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <dithering_fragment>',
+      `// Subsurface scattering: backlit leaf glow
+      #ifdef USE_LIGHT
+      #endif
+      vec3 leafGlow = diffuse * 0.3;
+      // Approximate: brighter when DoubleSide back face is lit
+      float backlit = pow(max(0.0, dot(vViewDir, vec3(0.3, 0.8, 0.3))), 2.0) * 0.2;
+      gl_FragColor.rgb += leafGlow * backlit;
+      #include <dithering_fragment>`
     );
   };
   return mat;

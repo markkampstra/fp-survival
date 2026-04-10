@@ -65,32 +65,31 @@ export class Terrain {
       flatShading: false,
     });
 
-    // Shader patches: height fog + procedural texture detail + slope-based roughness
+    // Shader patches: Tier 1-3 terrain enhancements
+    const terrainUniforms = { uTime: { value: 0 } };
     material.onBeforeCompile = (shader) => {
-      // Pass world position to fragment shader for procedural detail
+      shader.uniforms.uTime = terrainUniforms.uTime;
+
+      // Vertex: pass world position + normal to fragment
       shader.vertexShader = shader.vertexShader.replace(
         '#include <common>',
-        `
-        #include <common>
+        `#include <common>
         varying vec3 vWorldPosition;
-        varying vec3 vWorldNormal;
-        `
+        varying vec3 vWorldNormal;`
       );
       shader.vertexShader = shader.vertexShader.replace(
         '#include <fog_vertex>',
-        `
-        #include <fog_vertex>
+        `#include <fog_vertex>
         vWorldPosition = (modelMatrix * vec4(position, 1.0)).xyz;
         vWorldNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
-        vFogDepth = vFogDepth * (1.0 + max(0.0, 8.0 - vWorldPosition.y) * 0.15);
-        `
+        vFogDepth = vFogDepth * (1.0 + max(0.0, 8.0 - vWorldPosition.y) * 0.12);`
       );
 
-      // Fragment: procedural detail noise + slope-based roughness
+      // Fragment: noise functions + all terrain effects
       shader.fragmentShader = shader.fragmentShader.replace(
         '#include <common>',
-        `
-        #include <common>
+        `#include <common>
+        uniform float uTime;
         varying vec3 vWorldPosition;
         varying vec3 vWorldNormal;
 
@@ -101,42 +100,71 @@ export class Terrain {
           vec2 i = floor(p);
           vec2 f = fract(p);
           f = f * f * (3.0 - 2.0 * f);
-          float a = hash2D(i);
-          float b = hash2D(i + vec2(1.0, 0.0));
-          float c = hash2D(i + vec2(0.0, 1.0));
-          float d = hash2D(i + vec2(1.0, 1.0));
-          return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
-        }
-        `
+          return mix(mix(hash2D(i), hash2D(i+vec2(1,0)), f.x),
+                     mix(hash2D(i+vec2(0,1)), hash2D(i+vec2(1,1)), f.x), f.y);
+        }`
       );
+
+      // Color: procedural detail + slope + caustics
       shader.fragmentShader = shader.fragmentShader.replace(
         '#include <color_fragment>',
-        `
-        #include <color_fragment>
+        `#include <color_fragment>
 
-        // Procedural detail: subtle noise to break up flat vertex colors
+        // Procedural detail noise
         float detail = detailNoise(vWorldPosition.xz * 2.0) * 0.06 - 0.03;
         diffuseColor.rgb += detail;
-
-        // Fine grain at close range
         float grain = detailNoise(vWorldPosition.xz * 12.0) * 0.03 - 0.015;
         diffuseColor.rgb += grain;
 
-        // Mild slope variation (not darkening — just slight color shift)
+        // Slope variation
         float slope = 1.0 - vWorldNormal.y;
         diffuseColor.rgb *= 1.0 - slope * 0.08;
-        `
+
+        // Water caustics on underwater/shore terrain
+        if (vWorldPosition.y < 1.5) {
+          float caustStr = smoothstep(1.5, 0.0, vWorldPosition.y);
+          float c1 = sin(vWorldPosition.x * 4.0 + uTime * 1.2) * sin(vWorldPosition.z * 3.5 + uTime * 0.9);
+          float c2 = sin(vWorldPosition.x * 3.0 - uTime * 0.8) * sin(vWorldPosition.z * 4.5 + uTime * 1.1);
+          float caustic = abs(c1 + c2) * 0.5;
+          diffuseColor.rgb += vec3(0.06, 0.1, 0.12) * caustic * caustStr;
+        }`
       );
+
+      // Normal perturbation: procedural bump mapping from noise
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <normal_fragment_maps>',
+        `#include <normal_fragment_maps>
+        // Procedural normal perturbation — fake bump mapping from noise
+        float eps = 0.5;
+        float nH  = detailNoise(vWorldPosition.xz * 3.0);
+        float nHx = detailNoise((vWorldPosition.xz + vec2(eps, 0.0)) * 3.0);
+        float nHz = detailNoise((vWorldPosition.xz + vec2(0.0, eps)) * 3.0);
+        vec3 bumpNormal = normalize(vec3((nH - nHx) / eps * 0.3, 1.0, (nH - nHz) / eps * 0.3));
+        normal = normalize(normal + bumpNormal * 0.15);`
+      );
+
+      // Roughness: slope-based
       shader.fragmentShader = shader.fragmentShader.replace(
         '#include <roughnessmap_fragment>',
-        `
-        #include <roughnessmap_fragment>
-        // Slope-based roughness: flat = smooth (grass), steep = rough (rock)
+        `#include <roughnessmap_fragment>
         float slopeR = 1.0 - vWorldNormal.y;
-        roughnessFactor = mix(roughnessFactor, 0.95, slopeR);
+        roughnessFactor = mix(roughnessFactor, 0.95, slopeR);`
+      );
+
+      // Atmospheric perspective: distant terrain shifts toward sky blue
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <fog_fragment>',
         `
+        float distFromCam = length(vWorldPosition - cameraPosition);
+        float scatter = 1.0 - exp(-distFromCam * 0.003);
+        vec3 atmosColor = vec3(0.55, 0.72, 0.9);
+        gl_FragColor.rgb = mix(gl_FragColor.rgb, atmosColor, scatter * 0.35);
+        #include <fog_fragment>`
       );
     };
+
+    // Store uniforms ref so game loop can update time
+    (material as any)._terrainUniforms = terrainUniforms;
 
     this.mesh = new THREE.Mesh(this.geometry, material);
     this.mesh.receiveShadow = true;

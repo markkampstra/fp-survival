@@ -524,8 +524,13 @@ export class Game {
       this.renderer.toneMappingExposure += flash * 0.5;
     }
 
+    // Update terrain time uniform for caustics animation
+    const terrainMat = this.terrain.mesh.material as any;
+    if (terrainMat._terrainUniforms) {
+      terrainMat._terrainUniforms.uTime.value += dt;
+    }
+
     // Wet surface effect — terrain gets shinier when raining
-    const terrainMat = this.terrain.mesh.material as THREE.MeshStandardMaterial;
     if (rainIntensity > 0.05) {
       terrainMat.roughness = 0.85 - rainIntensity * 0.45;
       terrainMat.metalness = rainIntensity * 0.25;
