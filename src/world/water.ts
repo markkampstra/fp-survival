@@ -5,15 +5,15 @@ export class Water {
   private time = 0;
 
   constructor() {
-    const geometry = new THREE.PlaneGeometry(2000, 2000, 1, 1);
+    const geometry = new THREE.CircleGeometry(5000, 64);
     geometry.rotateX(-Math.PI / 2);
 
     const material = new THREE.MeshStandardMaterial({
-      color: 0x006994,
+      color: 0x4a90b0,
       transparent: true,
-      opacity: 0.7,
+      opacity: 0.9,
       roughness: 0.1,
-      metalness: 0.3,
+      metalness: 0.15,
       side: THREE.DoubleSide,
     });
 

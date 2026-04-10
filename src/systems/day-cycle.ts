@@ -182,13 +182,13 @@ export class DayCycle {
 
     if (sunElev < -5) {
       fog.color.setHex(0x112244);
-      fog.density = 0.0015; // same as day — don't eat the moonlight
+      fog.density = 0.003;
     } else if (sunElev < 5) {
       fog.color.setHex(0xcc8855);
-      fog.density = 0.0017;
+      fog.density = 0.003;
     } else {
       fog.color.setHex(0x87ceeb);
-      fog.density = 0.0015;
+      fog.density = 0.003;
     }
   }
 

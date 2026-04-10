@@ -32,7 +32,13 @@ export class Terrain {
 
       // Noise-based height
       const noise = (fbm(x, z, 6, 0.5, 2.0, 0.005) + 1) * 0.5; // normalize to 0-1
-      const height = noise * MAX_HEIGHT * smoothFalloff;
+      let height = noise * MAX_HEIGHT * smoothFalloff;
+
+      // Sink terrain below water beyond the island so mesh edges are invisible
+      if (dist > ISLAND_RADIUS * 0.95) {
+        const sinkT = (dist - ISLAND_RADIUS * 0.95) / (ISLAND_RADIUS * 0.3);
+        height = height - Math.max(0, sinkT) * 3; // dip up to 3 units below water
+      }
 
       positions.setY(i, height);
       this.heightData[i] = height;
@@ -40,11 +46,10 @@ export class Terrain {
       // Biome-based vertex colors with baked ambient occlusion
       const biomeColor = getBiomeColor(height, noise);
 
-      // AO: lower areas (valleys, sea level) are darker
-      // Also darken based on how much lower this vertex is vs surroundings
-      const ao = Math.min(1, 0.55 + height * 0.03); // 0.55 at sea level → 1.0 at height 15+
-      // Shore AO: extra darkening near water line
-      const shoreAO = height < 1.5 ? 0.75 + (height / 1.5) * 0.25 : 1.0;
+      // AO: subtle darkening in low areas only
+      const ao = Math.min(1, 0.8 + height * 0.015); // 0.8 at sea level → 1.0 at height ~13
+      // Shore AO: very mild darkening near water line
+      const shoreAO = height < 1.5 ? 0.9 + (height / 1.5) * 0.1 : 1.0;
       const totalAO = ao * shoreAO;
 
       colors.push(biomeColor.r * totalAO, biomeColor.g * totalAO, biomeColor.b * totalAO);
@@ -109,17 +114,17 @@ export class Terrain {
         `
         #include <color_fragment>
 
-        // Procedural detail: subtle noise variation to break up flat vertex colors
-        float detail = detailNoise(vWorldPosition.xz * 2.0) * 0.12 - 0.06;
+        // Procedural detail: subtle noise to break up flat vertex colors
+        float detail = detailNoise(vWorldPosition.xz * 2.0) * 0.06 - 0.03;
         diffuseColor.rgb += detail;
 
-        // Fine grain texture at close range
-        float grain = detailNoise(vWorldPosition.xz * 15.0) * 0.04 - 0.02;
+        // Fine grain at close range
+        float grain = detailNoise(vWorldPosition.xz * 12.0) * 0.03 - 0.015;
         diffuseColor.rgb += grain;
 
-        // Slope-based darkening: steep slopes = more rock-like (darker)
+        // Mild slope variation (not darkening — just slight color shift)
         float slope = 1.0 - vWorldNormal.y;
-        diffuseColor.rgb *= 1.0 - slope * 0.25;
+        diffuseColor.rgb *= 1.0 - slope * 0.08;
         `
       );
       shader.fragmentShader = shader.fragmentShader.replace(

@@ -92,7 +92,7 @@ export class Game {
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = createRenderer(canvas);
     this.scene = new THREE.Scene();
-    this.scene.fog = new THREE.FogExp2(0x87ceeb, 0.0015);
+    this.scene.fog = new THREE.FogExp2(0x87ceeb, 0.003);
 
     this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
     this.camera.position.set(0, 20, 0);
@@ -537,7 +537,7 @@ export class Game {
     // Fog — multiplied by weather
     const fog = this.scene.fog as THREE.FogExp2;
     if (fog) {
-      const baseFog = 0.0015; // day-cycle sets this
+      const baseFog = 0.003;
       fog.density = Math.max(fog.density, baseFog * this.weatherSystem.getFogMultiplier());
     }
 

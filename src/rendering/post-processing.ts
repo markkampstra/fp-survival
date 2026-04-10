@@ -29,20 +29,17 @@ const ColorGradeShader = {
       vec3 color = texture2D(tDiffuse, vUv).rgb;
 
       // --- Color grading: warm tropical feel ---
-      // Slight warm shift (boost reds/yellows, cool blues slightly)
-      color = pow(color, vec3(0.96, 1.0, 1.04));
+      // Slight warm shift
+      color = pow(color, vec3(0.97, 1.0, 1.03));
 
-      // Boost saturation 10%
+      // Boost saturation 8%
       float lum = dot(color, vec3(0.299, 0.587, 0.114));
-      color = mix(vec3(lum), color, 1.1);
+      color = mix(vec3(lum), color, 1.08);
 
-      // Subtle contrast S-curve
-      color = smoothstep(0.0, 1.05, color);
-
-      // --- Vignette: darken edges ---
+      // --- Vignette: subtle edge darkening ---
       vec2 center = vUv - 0.5;
       float dist = length(center);
-      float vignette = 1.0 - smoothstep(0.4, 0.85, dist);
+      float vignette = 1.0 - smoothstep(0.5, 0.95, dist) * 0.35;
       color *= vignette;
 
       // --- Film grain: very subtle noise to break banding ---
